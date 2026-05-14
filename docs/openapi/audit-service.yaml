@@ -1,0 +1,69 @@
+openapi: 3.0.3
+info:
+  title: Audit Service API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: Service is healthy.
+  /audit/events:
+    post:
+      summary: Append an immutable audit snapshot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAuditSnapshotRequest"
+      responses:
+        "201":
+          description: Snapshot stored.
+        "400":
+          description: Invalid request.
+  /audit/orders/{correlationId}:
+    get:
+      summary: Return all snapshots for an order process in chronological order.
+      parameters:
+        - name: correlationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Snapshot timeline.
+components:
+  schemas:
+    CreateAuditSnapshotRequest:
+      type: object
+      required:
+        - correlationId
+        - eventType
+        - service
+        - statusCode
+      properties:
+        correlationId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          example: WAREHOUSE_RESERVED
+        service:
+          type: string
+          example: warehouse-service
+        payload:
+          type: object
+          additionalProperties: true
+        previousEventId:
+          type: string
+          format: uuid
+          nullable: true
+        actor:
+          type: string
+          example: warehouse-service
+        statusCode:
+          type: string
+          example: SUCCESS

@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Service API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: Service is healthy.
+  /inventory:
+    get:
+      responses:
+        "200":
+          description: Current available stock.
+  /reservations:
+    post:
+      summary: Check stock and reserve items.
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReservationRequest"
+      responses:
+        "201":
+          description: Reservation created.
+        "409":
+          description: Insufficient stock.
+        "422":
+          description: Invalid request.
+  /reservations/{reservationId}:
+    delete:
+      summary: Cancel a reservation and return reserved stock.
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reservation cancelled.
+        "404":
+          description: Reservation not found or no longer cancellable.
+  /reservations/{reservationId}/commit:
+    post:
+      summary: Commit a reservation after successful payment.
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reservation committed.
+        "404":
+          description: Reservation not found or no longer committable.
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateReservationRequest:
+      type: object
+      required:
+        - orderId
+        - items
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReservationItem"
+    ReservationItem:
+      type: object
+      required:
+        - sku
+        - quantity
+      properties:
+        sku:
+          type: string
+          example: SKU-CHAIR
+        quantity:
+          type: integer
+          minimum: 1

@@ -1,0 +1,31 @@
+using System.Net.Http.Json;
+using InvoiceService.Application;
+
+namespace InvoiceService.Infrastructure;
+
+public sealed class HttpAuditSink(HttpClient httpClient, IConfiguration configuration, ILogger<HttpAuditSink> logger) : IAuditSink
+{
+    private readonly string _baseUrl = configuration["AUDIT_SERVICE_URL"] ?? "http://audit-service:8080";
+
+    public async Task RecordAsync(Guid correlationId, string eventType, string statusCode, object payload, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new
+            {
+                correlationId,
+                eventType,
+                service = "invoice-service",
+                payload,
+                actor = "invoice-service",
+                statusCode
+            };
+
+            await httpClient.PostAsJsonAsync($"{_baseUrl}/audit/events", request, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not write audit snapshot for {EventType}", eventType);
+        }
+    }
+}
