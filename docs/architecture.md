@@ -5,9 +5,13 @@ Dieses Dokument beschreibt die Architektur des Microservice-basierten Bestellsys
 ---
 
 ## 1. Systemkontext-Diagramm
-Das Systemkontext-Diagramm zeigt die Abgrenzung des Systems zu externen Akteuren.
+
+Das Systemkontext-Diagramm beschreibt die Abgrenzung des „Order Processing Systems“ zu externen Akteuren und externen Systemen. Es zeigt, welche Benutzer und Fremdsysteme mit der Microservice-Landschaft interagieren.
+
 
 [Systemkontext-Diagramm](./images/system-context.png)
+
+![img.png](images/img.png)
 
 *   **Kunde:** Initiiert den Bestellprozess über den Shop-Service.
 *   **Payment-Provider-Stubs:** Externe Schnittstellen (Simulatoren) für die Zahlungsabwicklung (z. B. Klarna, PayPal).
@@ -16,14 +20,46 @@ Das Systemkontext-Diagramm zeigt die Abgrenzung des Systems zu externen Akteuren
 ---
 
 ## 2. Komponentendiagramm
+Die Architektur basiert auf einem hybriden Kommunikationsansatz aus synchronen REST-Aufrufen und asynchroner Event-Kommunikation über Kafka.
+
+![img.png](./images/system-context.png)
+
+Das System besteht aus mehreren unabhängigen Microservices:
+
+* Shop-Service
+* Warehouse-Service
+* Billing-Service
+* Payment-Fassade
+* Invoice-Service
+* Audit-Service
+
+Die Services kommunizieren über einen hybriden Ansatz aus synchroner REST-Kommunikation und asynchroner Event-Kommunikation über Kafka.
+
+* **Synchron:**
+    * Shop-Service ↔ Warehouse-Service
+    * Shop-Service ↔ Billing-Service
+
+* **Asynchron (Kafka Events):**
+    * Billing-Service → Invoice-Service
+    * Billing-Service → Warehouse-Service
+    * Alle Services → Audit-Service
+
+Jeder Service besitzt eine eigene Datenbank („Database per Service“), um geringe Kopplung, unabhängige Skalierung und klare Verantwortlichkeiten zu gewährleisten.
 Übersicht der internen Services, Schnittstellen und Kommunikationswege.
 
-[Komponentendiagramm](./images/component-diagram.png)
+Zusätzlich umfasst das System eine Monitoring- und Logging-Infrastruktur:
 
-*   **Synchron (REST):** Shop-Service → Warehouse-Service (Reservierung) und Shop-Service → Billing-Service (Zahlungsinitiierung).
-*   **Asynchron (Kafka):** Billing-Service → Invoice-Service (Rechnungserstellung) und Warehouse-Service (finales Ausbuchen).
-*   **Auditierung:** Alle Services senden Status-Events an den zentralen Kafka-Bus, welche vom **Audit-Service** konsumiert und persistiert werden.
+![img_2.png](images/monitoring.png)
 
+
+* **Prometheus**
+    * sammelt Metriken aller Services
+
+* **Loki**
+    * zentralisiert Logs aller Services
+
+* **Grafana**
+    * visualisiert Metriken und Logs für Monitoring und Fehleranalyse durch Administratoren
 ---
 
 ## 3. Sequenzdiagramm - Happy Path (UML)
@@ -41,19 +77,119 @@ Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 ---
 
 ## 4. Sequenzdiagramm - Fehlerszenario (UML)
-Kompensationsablauf bei einer fehlgeschlagenen Zahlung.
 
 [Sequenzdiagramm Fehlerszenario](./images/error-scenario.png)
 
-*   **Szenario:** Der Zahlungsanbieter verweigert die Autorisierung (`PAYMENT_FAILED`).
-*   **Kompensation:**
-    *   Der Billing-Service meldet den Fehler an den Shop-Service zurück.
-    *   Der Shop-Service triggert einen Kompensations-Call (`releaseReservation`) am Warehouse-Service.
-    *   Der Audit-Service protokolliert den `statusCode: FAILURE` und den finalen Status `COMPENSATED`.
+---
+
+# 5. Event-Konzept
+
+## Architektur-Grundlage
+
+- **Kafka** ist der zentrale Message Bus für alle asynchronen Prozesse
+- Zwei Verbindungen bleiben **synchron per REST**, weil der Shop-Service die Antwort abwarten muss, bevor der Bestellstatus gesetzt werden kann
 
 ---
 
-## 5. Architectural Decision Records (ADRs)
+## Synchron REST
+
+| Von | Nach | Grund |
+|-----|------|-------|
+| Shop-Service | Warehouse-Service | Lagerprüfung und Reservierung müssen bestätigt sein |
+| Shop-Service | Billing-Service | Zahlungsbestätigung muss vorliegen bevor `COMPLETED` gesetzt wird |
+
+---
+
+## Asynchron Kafka — Topics & Events
+
+### Topic `orders`
+
+| Publisher | Event | Consumer | Reaktion |
+|-----------|-------|----------|----------|
+| Shop-Service | `OrderCreated` | Audit-Service | persistiert Event |
+| Shop-Service | `OrderCompleted` | Audit-Service | persistiert Event |
+| Shop-Service | `OrderCancelled` | Audit-Service | persistiert Event |
+
+> Optional: Notification-Service subscribed `OrderCancelled` und informiert den Kunden per E-Mail.
+
+---
+
+### Topic `warehouse`
+
+| Publisher | Event | Consumer | Reaktion |
+|-----------|-------|----------|----------|
+| Warehouse-Service | `StockReserved` | Audit-Service | persistiert Event *(nach REST-Aufruf von Shop)* |
+| Warehouse-Service | `StockCommitted` | Audit-Service | persistiert Event *(finale Ausbuchung nach `PaymentSucceeded`)* |
+| Warehouse-Service | `StockReservationFailed` | Shop-Service | bricht Bestellung ab → setzt `OrderCancelled` |
+| Warehouse-Service | `StockReservationFailed` | Audit-Service | persistiert Event |
+
+---
+
+### Topic `payments`
+
+| Publisher | Event | Consumer | Reaktion |
+|-----------|-------|----------|----------|
+| Billing-Service | `PaymentInitiated` | Audit-Service | persistiert Event |
+| Billing-Service | `PaymentSucceeded` | Invoice-Service | erstellt PDF-Rechnung → publiziert `InvoiceCreated` |
+| Billing-Service | `PaymentSucceeded` | Warehouse-Service | bucht Lager endgültig aus → publiziert `StockCommitted` |
+| Billing-Service | `PaymentSucceeded` | Audit-Service | persistiert Event |
+| Billing-Service | `PaymentFailed` | Warehouse-Service | gibt Reservierung frei |
+| Billing-Service | `PaymentFailed` | Audit-Service | persistiert Event |
+
+---
+
+### Topic `invoices`
+
+| Publisher | Event | Consumer | Reaktion |
+|-----------|-------|----------|----------|
+| Invoice-Service | `InvoiceCreated` | Audit-Service | persistiert Event |
+
+> Optional: Notification-Service subscribed `InvoiceCreated` und verschickt die PDF-Rechnung per E-Mail an den Kunden.
+
+---
+
+## Audit-Service — gilt für alle Topics
+
+- Subscribed **alle vier Topics**: `orders`, `warehouse`, `payments`, `invoices`
+- Schreibt jeden eingehenden Event in seine eigene **PostgreSQL-Datenbank**
+- Prinzip: **nur Insert** — niemals Update oder Delete (append-only / immutable log)
+- Zweck: lückenlose, unveränderliche Protokollierung aller Systemaktivitäten für Compliance und Nachvollziehbarkeit
+
+---
+
+## Übersicht — alle Events auf einen Blick
+
+| Event | Topic | Publisher | Happy Path |
+|-------|-------|-----------|------------|
+| `OrderCreated` | `orders` | Shop-Service | ✅ |
+| `StockReserved` | `warehouse` | Warehouse-Service | ✅ |
+| `PaymentInitiated` | `payments` | Billing-Service | ✅ |
+| `PaymentSucceeded` | `payments` | Billing-Service | ✅ |
+| `InvoiceCreated` | `invoices` | Invoice-Service | ✅ |
+| `StockCommitted` | `warehouse` | Warehouse-Service | ✅ |
+| `OrderCompleted` | `orders` | Shop-Service | ✅ |
+| `StockReservationFailed` | `warehouse` | Warehouse-Service | ❌ Fehlerfall |
+| `PaymentFailed` | `payments` | Billing-Service | ❌ Fehlerfall |
+| `OrderCancelled` | `orders` | Shop-Service | ❌ Fehlerfall |
+
+---
+
+## 6. Datenmodellierung
+
+### 6.1 Shop-Service Datenmodell
+
+![Shop ERD](./images/shop-erd.png)
+- Order
+- OrderItem
+- Status
+
+### 6.2 Billing-Service Datenmodell
+- Payment
+- Transaction
+
+---
+
+## 7. Architectural Decision Records (ADRs)
 
 ### ADR 1: Wahl des Message Brokers (Kafka)
 *   **Entscheidung:** Nutzung von Apache Kafka für die inter-Service Kommunikation.
@@ -69,7 +205,7 @@ Kompensationsablauf bei einer fehlgeschlagenen Zahlung.
 
 ---
 
-## 6. Erweiterbarkeitsanalyse: Neuer Zahlungsanbieter
+## 8. Erweiterbarkeitsanalyse
 
 Um einen vierten Zahlungsanbieter (z. B. "CryptoPay") zu integrieren, sind folgende Schritte nötig:
 
