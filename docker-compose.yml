@@ -1,0 +1,60 @@
+services:
+  audit-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: audit
+      POSTGRES_USER: audit
+      POSTGRES_PASSWORD: audit
+    ports:
+      - "5432:5432"
+    volumes:
+      - audit-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audit -d audit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  audit-service:
+    build:
+      context: ./audit-service-dotnet
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      AUDIT_DB_CONNECTION: Host=audit-db;Port=5432;Database=audit;Username=audit;Password=audit
+    depends_on:
+      audit-db:
+        condition: service_healthy
+    ports:
+      - "5081:8080"
+
+  warehouse-service:
+    build:
+      context: ./warehouse-service-dotnet
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      AUDIT_SERVICE_URL: http://audit-service:8080
+      WAREHOUSE_INITIAL_STOCK: SKU-CHAIR:10,SKU-DESK:5,SKU-LAMP:20
+    depends_on:
+      - audit-service
+    ports:
+      - "5082:8080"
+
+  invoice-service:
+    build:
+      context: ./invoice-service-dotnet
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      AUDIT_SERVICE_URL: http://audit-service:8080
+      INVOICE_RETRY_COUNT: 3
+      INVOICE_FORCE_FAILURE: "false"
+      INVOICE_DATA_DIR: /app/data/invoices
+    depends_on:
+      - audit-service
+    ports:
+      - "5083:8080"
+    volumes:
+      - invoice-data:/app/data/invoices
+
+volumes:
+  audit-db-data:
+  invoice-data:

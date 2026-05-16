@@ -1,1 +1,10 @@
 docs/.Rhistory
+.DS_Store
+bin/
+obj/
+.vs/
+.vscode/
+TestResults/
+*.user
+*.suo
+*.log

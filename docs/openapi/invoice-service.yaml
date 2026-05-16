@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Invoice Service API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: Service is healthy.
+  /events/payment-succeeded:
+    post:
+      summary: Accept a PaymentSucceeded event and create an invoice with retry handling.
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentSucceededEvent"
+      responses:
+        "202":
+          description: Invoice accepted and created.
+        "422":
+          description: Invalid event.
+        "503":
+          description: Invoice generation failed after retries.
+  /invoices/{invoiceId}:
+    get:
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Invoice found.
+        "404":
+          description: Invoice not found.
+components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    PaymentSucceededEvent:
+      type: object
+      required:
+        - correlationId
+        - orderId
+        - transactionId
+        - amount
+        - currency
+        - customerEmail
+        - items
+      properties:
+        correlationId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          example: tx-123
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: EUR
+        customerEmail:
+          type: string
+          format: email
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+    InvoiceLineItem:
+      type: object
+      required:
+        - sku
+        - name
+        - quantity
+        - unitPrice
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPrice:
+          type: number
+          format: decimal
