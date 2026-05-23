@@ -176,6 +176,7 @@ Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 | `StockReservationFailed` | `warehouse` | Warehouse-Service | ❌ Fehlerfall |
 | `PaymentFailed` | `payments` | Billing-Service | ❌ Fehlerfall |
 | `OrderCancelled` | `orders` | Shop-Service | ❌ Fehlerfall |
+| `ReservationRollbackRequested` | `orders` | Shop-Service | ❌ Fehlerfall |
 
 
 
@@ -364,6 +365,8 @@ automatisch (`FAIL_ON_UNKNOWN_PROPERTIES = false`).
   * UUIDs sind weltweit eindeutig.
   * Mehrere Services können unabhängig Entitäten erzeugen, ohne ID-Konflikte zu riskieren.
 
+--- 
+
 ### API-Design
 
 ### Synchroner Flow mit parallelem Kafka
@@ -409,7 +412,7 @@ Client ◄── 201 COMPLETED ──────┘
 
 ### Request vom Client
 
-> Client schickt **keine Preise** — Preise kommen von Warehouse.
+> Client schickt **keine Preise** — Preise kommen von Kategorie.
 > Verhindert Preismanipulation durch den Client.
 
 ```http
@@ -620,10 +623,227 @@ PENDING ──► PROCESSING ──► COMPLETED
 | `CANCELLED` | Fehler bei Warehouse oder Payment |  als Error-Response |
 
 ### 6.2 Billing-Service Design
-- Payment
-- Transaction
+
+### ER-Diagramm
+![Payment](./images/payment-erd.png)
+
+**Begründung:**
+
+* **Trennung von Business- und Integrationslogik**
+  * `PAYMENT` repräsentiert den fachlichen Zahlungsstatus (Business View)
+  * `PAYMENT_TRANSACTION` bildet einzelne Provider-Aufrufe ab (technische Historie)
+  * Dadurch klare Separation zwischen Domänenlogik und externer Kommunikation
+
+* **Unterstützung von Retry- und Timeout-Szenarien**
+  * Eine Zahlung kann mehrere Provider-Requests enthalten
+  * Jeder Versuch wird als eigene Transaction gespeichert
+  * Ermöglicht Nachvollziehbarkeit bei Fehlern und Wiederholungen
+
+* **Provider-Unabhängigkeit**
+  * System ist nicht an einen Zahlungsanbieter gebunden
+  * Unterschiedliche Provider (Stripe, PayPal, Klarna) werden einheitlich modelliert
+
+* **Nachvollziehbarkeit & Auditfähigkeit**
+  * `raw_response` speichert vollständige Provider-Antworten
+  * Ideal für Debugging, Supportfälle und finanzielle Reconciliation
+
+* **fee_amount**
+  * Transaktionsgebühr des Providers
+  * Wichtig zur Berechnung des tatsächlichen Netto-Umsatzes
 
 ---
+
+
+
+### API-Design
+
+### Synchroner Checkout-Flow mit Provider-Delegation
+
+
+```
+Shop-Service ──POST /payments──► Payment-Service
+(PaymentRequest DTO)                  │
+                                      │──► 1. Persistiert Transaktion (INITIALIZED)
+                                      │──► 2. Kafka: PaymentInitiated ──► Audit-Service
+                                      │
+                           ┌──────────▼──────────┐
+                           │ PaymentPluginFacade │ (Echtzeit-Auswahl)
+                           └──────────┬──────────┘
+                                      │ Dynamisches Routing via Name
+                           ┌──────────▼──────────┐
+                           │   PayPal / Stripe   │ (Externe Provider-API)
+                           │   ← Return SUCCESS  │
+                           └──────────┬──────────┘
+                                      │
+                           ┌──────────▼──────────┐
+                           │ 3. DB Update         │
+                           │  status = COMPLETED  │──► Kafka: PaymentSucceeded ──► Invoice-Service
+                           └──────────┬───────────┘                             ──► Warehouse-Service
+                                      │                                         ──► Audit-Service
+Shop-Service ◄── 200 CONFIRMED ───────┘
+
+```
+---
+
+### POST /payments
+
+### Request vom Shop-Service
+
+POST /payments
+
+Content-Type: application/json
+```json
+{
+  "correlationId": "482e1c4c-74ee-4940-8cfd-5883c4fd6b9e",
+  "orderId": "dd1a9ef5-adfa-48cf-a7b8-8a45d82103be",
+  "totalAmount": 898.99,
+  "currency": "EUR",
+  "paymentProvider": "PAYPAL",
+  "userId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+---
+
+### Response vom Payment-Service
+
+#### Erfolg 200 OK
+```json 
+{
+  "correlationId": "482e1c4c-74ee-4940-8cfd-5883c4fd6b9e",
+  "orderId": "dd1a9ef5-adfa-48cf-a7b8-8a45d82103be",
+  "paymentId": "74fb29d1-d3f2-469d-ae9e-d838fd9fa51d",
+  "status": "CONFIRMED",
+  "paidAt": "2026-05-21T19:30:00Z"
+}
+```
+---
+#### Fehler 402 Payment Required (Kreditkarte abgelehnt / Zu wenig Guthaben)
+```json
+{
+  "correlationId": "482e1c4c-74ee-4940-8cfd-5883c4fd6b9e",
+  "orderId": "dd1a9ef5-adfa-48cf-a7b8-8a45d82103be",
+  "status": "FAILED",
+  "reason": "INSUFFICIENT_FUNDS"
+}
+```
+--- 
+## GET /payments/{transactionId}
+```json
+{
+  "transactionId": "74fb29d1-d3f2-469d-ae9e-d838fd9fa51d",
+  "correlationId": "482e1c4c-74ee-4940-8cfd-5883c4fd6b9e",
+  "orderId": "dd1a9ef5-adfa-48cf-a7b8-8a45d82103be",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "totalAmount": 898.99,
+  "currency": "EUR",
+  "paymentProvider": "PAYPAL",
+  "status": "COMPLETED",
+  "reason": null,
+  "createdAt": "2026-05-21T19:29:42Z"
+}
+```
+---
+
+## GET /actuator/health
+```json
+{ "status": "UP" }
+```
+--- 
+### Status-Übergänge der Transaktion
+
+```
+INITIALIZED──►PROCESSING ──► COMPLETED
+                │
+                └──► FAILED (z.B. Timeout, Limit überschritten, Abbruch durch User)
+```
+--- 
+### Software-Design: Offen für Erweiterungen (Plugin-Muster)
+
+Um das System hochgradig wartbar zu machen und neue Zahlungsanbieter ohne Seiteneffekte hinzuzufügen,
+wird das Strategy Pattern (Kombiniert mit einer Fassade) implementiert.
+
+#### 1. Das Interface für die Provider-Strategie
+
+Jeder neue Zahlungsanbieter implementiert dieses Interface:
+
+```
+ public interface PaymentStrategy {
+    boolean supports(PaymentProvider provider);
+    ProviderResponse processPayment(PaymentRequest request);
+}
+```
+---
+#### 2. Die konkrete Implementierung (Beispiel PayPal)
+
+```
+@Component
+public class PaypalPaymentStrategy implements PaymentStrategy {
+    @Override
+    public boolean supports(PaymentProvider provider) {
+        return provider == PaymentProvider.PAYPAL;
+    }
+
+    @Override
+    public ProviderResponse processPayment(PaymentRequest request) {
+        // Logik für den echten PayPal SDK-Aufruf
+        return new ProviderResponse(true, null);
+    }
+}
+```
+---
+##### 3. Die delegierende Fassade (Der Core-Service)
+
+Der eigentliche Service injiziert vollautomatisch alle verfügbaren Strategien in einer Liste. Kommt ein Request rein, 
+sucht er sich den passenden Provider dynamisch heraus:
+
+```
+@Service
+@RequiredArgsConstructor
+public class PaymentPluginFacade {
+
+    private final List<PaymentStrategy> strategies;
+
+    public ProviderResponse execute(PaymentRequest request) {
+        return strategies.stream()
+                .filter(strategy -> strategy.supports(request.paymentProvider()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Provider nicht unterstützt!"))
+                .processPayment(request);
+    }
+}
+```
+
+Vorteil für die Weiterentwicklung: Wenn im nächsten Sprint Klarna oder Stripe hinzukommt, schreibt dein Kollege einfach eine neue Klasse, die PaymentStrategy implementiert und versieht sie mit @Component. Der bestehende Zahlungskern muss weder angefasst, 
+noch getestet, noch verändert werden (Einhaltung des Open-Closed-Prinzips).
+---
+# Payment Service — Must-DOs
+
+## 1. Idempotency-Key
+- Jeden API-Call mit eindeutiger `order_id` / `payment_id` als Header senden
+- Provider erkennt Retry → kein doppeltes Abbuchen
+- Verhindert Double-Charging bei Timeout / Netzwerkfehler
+
+## 2. Währung — Minor Units
+- Provider rechnet in Cent (kleinste Einheit), nicht in BigDecimal
+- `898.99 EUR` → `89899` (× 100)
+- Achtung: JPY hat keine Cents, KWD hat 3 Stellen → immer Doku prüfen
+
+## 3. TLS 1.2 / 1.3 erzwingen
+- Stripe / PayPal blockieren alte TLS-Versionen hart
+- In Spring Boot: `SSLContextBuilder` mit `TLSv1.3` konfigurieren
+
+## 4. Provider-Fehler robust behandeln
+- `402` → Karte abgelehnt → Saga-Kompensation auslösen
+- `408` → Timeout → Retry mit Idempotency-Key
+- `500` → Provider-Fehler → Retry + Alert
+- Fehler dürfen System nie inkonsistent hinterlassen
+
+## 5. Audit-Logging — rawResponse persistieren
+- Komplette Provider-Antwort in DB speichern (`raw_response`)
+- Pflicht für: Debugging, Streitfälle, Finanz-Audit
+
+---
+
 
 ## 7. Architectural Decision Records (ADRs)
 
