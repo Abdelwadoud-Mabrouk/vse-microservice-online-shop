@@ -21,4 +21,13 @@ public sealed class InMemoryInvoiceRepository : IInvoiceRepository
         _invoices.TryGetValue(invoiceId, out var invoice);
         return Task.FromResult(invoice);
     }
+
+    public Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<Invoice>>(
+            _invoices.Values
+                .Where(invoice => string.Equals(invoice.CustomerEmail, customerEmail, StringComparison.OrdinalIgnoreCase))
+                .ToArray());
+    }
 }

@@ -1,3 +1,4 @@
+.Rhistory
 docs/.Rhistory
 .DS_Store
 bin/
@@ -8,3 +9,6 @@ TestResults/
 *.user
 *.suo
 *.log
+.env
+.env.*
+!.env.example

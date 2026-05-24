@@ -10,6 +10,7 @@ public sealed record PaymentSucceededRequest(
     decimal Amount,
     string? Currency,
     string? CustomerEmail,
+    CustomerDetailsRequest? Customer,
     List<InvoiceLineItemRequest>? Items)
 {
     public Dictionary<string, string[]>? Validate()
@@ -41,6 +42,19 @@ public sealed record PaymentSucceededRequest(
             errors[nameof(CustomerEmail)] = ["customerEmail is required."];
         }
 
+        if (Customer is null)
+        {
+            errors[nameof(Customer)] = ["customer details are required."];
+        }
+        else if (string.IsNullOrWhiteSpace(Customer.Name)
+            || string.IsNullOrWhiteSpace(Customer.Street)
+            || string.IsNullOrWhiteSpace(Customer.PostalCode)
+            || string.IsNullOrWhiteSpace(Customer.City)
+            || string.IsNullOrWhiteSpace(Customer.Country))
+        {
+            errors[nameof(Customer)] = ["customer needs name, street, postalCode, city, and country."];
+        }
+
         if (Items is null || Items.Count == 0)
         {
             errors[nameof(Items)] = ["At least one invoice item is required."];
@@ -66,10 +80,19 @@ public sealed record PaymentSucceededRequest(
             Amount,
             Currency!,
             CustomerEmail!,
+            CustomerDetails.Create(
+                Customer!.Name!,
+                CustomerEmail!,
+                Customer.Street!,
+                Customer.PostalCode!,
+                Customer.City!,
+                Customer.Country!),
             items);
 
         return new CreateInvoiceCommand(payment, retryCount);
     }
 }
+
+public sealed record CustomerDetailsRequest(string? Name, string? Street, string? PostalCode, string? City, string? Country);
 
 public sealed record InvoiceLineItemRequest(string? Sku, string? Name, int Quantity, decimal UnitPrice);

@@ -7,56 +7,58 @@ namespace WarehouseService.Tests;
 
 public sealed class WarehouseReservationTests
 {
+    private static readonly Guid ChairId = Guid.Parse("11111111-1111-4111-8111-111111111111");
+
     [Fact]
     public void TryReserve_WhenStockIsAvailable_CreatesReservationAndReducesStock()
     {
-        var repository = NewRepository("SKU-CHAIR:2");
+        var repository = NewRepository($"{ChairId}:SKU-CHAIR:2");
         var command = new ReserveStockCommand(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            [ReservationItem.Create("SKU-CHAIR", 1)]);
+            [ReservationItem.Create(ChairId, "SKU-CHAIR", 1)]);
 
         var result = repository.TryReserve(command);
         var inventory = repository.GetInventory();
 
         Assert.True(result.Success);
         Assert.NotNull(result.Reservation);
-        Assert.Equal(1, inventory["SKU-CHAIR"]);
+        Assert.Equal(1, inventory.Single(item => item.ProductId == ChairId).AvailableQuantity);
         Assert.Equal(ReservationStatus.Reserved, result.Reservation.Status);
     }
 
     [Fact]
     public void TryReserve_WhenStockIsInsufficient_DoesNotChangeInventory()
     {
-        var repository = NewRepository("SKU-CHAIR:1");
+        var repository = NewRepository($"{ChairId}:SKU-CHAIR:1");
         var command = new ReserveStockCommand(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            [ReservationItem.Create("SKU-CHAIR", 2)]);
+            [ReservationItem.Create(ChairId, "SKU-CHAIR", 2)]);
 
         var result = repository.TryReserve(command);
         var inventory = repository.GetInventory();
 
         Assert.False(result.Success);
         Assert.Null(result.Reservation);
-        Assert.Equal(1, inventory["SKU-CHAIR"]);
+        Assert.Equal(1, inventory.Single(item => item.ProductId == ChairId).AvailableQuantity);
     }
 
     [Fact]
     public void Cancel_ReturnsReservedStock()
     {
-        var repository = NewRepository("SKU-CHAIR:2");
+        var repository = NewRepository($"{ChairId}:SKU-CHAIR:2");
         var reservation = repository.TryReserve(new ReserveStockCommand(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            [ReservationItem.Create("SKU-CHAIR", 2)])).Reservation!;
+            [ReservationItem.Create(ChairId, "SKU-CHAIR", 2)])).Reservation!;
 
         var cancelled = repository.Cancel(reservation.ReservationId);
         var inventory = repository.GetInventory();
 
         Assert.NotNull(cancelled);
         Assert.Equal(ReservationStatus.Cancelled, cancelled.Status);
-        Assert.Equal(2, inventory["SKU-CHAIR"]);
+        Assert.Equal(2, inventory.Single(item => item.ProductId == ChairId).AvailableQuantity);
     }
 
     private static InMemoryWarehouseRepository NewRepository(string stock)

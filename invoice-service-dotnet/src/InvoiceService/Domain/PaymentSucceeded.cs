@@ -7,6 +7,7 @@ public sealed record PaymentSucceeded(
     decimal Amount,
     string Currency,
     string CustomerEmail,
+    CustomerDetails Customer,
     IReadOnlyList<InvoiceLineItem> Items)
 {
     public static PaymentSucceeded Create(
@@ -16,6 +17,7 @@ public sealed record PaymentSucceeded(
         decimal amount,
         string currency,
         string customerEmail,
+        CustomerDetails customer,
         IReadOnlyList<InvoiceLineItem> items)
     {
         if (correlationId == Guid.Empty)
@@ -45,6 +47,7 @@ public sealed record PaymentSucceeded(
             amount,
             Required(currency, nameof(currency)).ToUpperInvariant(),
             Required(customerEmail, nameof(customerEmail)),
+            customer,
             items);
     }
 

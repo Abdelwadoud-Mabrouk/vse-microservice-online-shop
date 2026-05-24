@@ -18,9 +18,9 @@ public sealed record CreateReservationRequest(Guid OrderId, List<ReservationItem
         {
             errors[nameof(Items)] = ["At least one item is required."];
         }
-        else if (Items.Any(item => string.IsNullOrWhiteSpace(item.Sku) || item.Quantity <= 0))
+        else if (Items.Any(item => item.ProductId == Guid.Empty || string.IsNullOrWhiteSpace(item.Sku) || item.Quantity <= 0))
         {
-            errors[nameof(Items)] = ["Each item needs a sku and a positive quantity."];
+            errors[nameof(Items)] = ["Each item needs a productId, sku and a positive quantity."];
         }
 
         return errors.Count == 0 ? null : errors;
@@ -29,11 +29,11 @@ public sealed record CreateReservationRequest(Guid OrderId, List<ReservationItem
     public ReserveStockCommand ToCommand(Guid correlationId)
     {
         var items = Items!
-            .Select(item => ReservationItem.Create(item.Sku, item.Quantity))
+            .Select(item => ReservationItem.Create(item.ProductId, item.Sku, item.Quantity))
             .ToArray();
 
         return new ReserveStockCommand(OrderId, correlationId, items);
     }
 }
 
-public sealed record ReservationItemRequest(string Sku, int Quantity);
+public sealed record ReservationItemRequest(Guid ProductId, string Sku, int Quantity);

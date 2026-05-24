@@ -46,6 +46,7 @@ public sealed class CreateInvoiceUseCaseTests
             129.99m,
             "EUR",
             "customer@example.com",
+            CustomerDetails.Create("Max Mustermann", "customer@example.com", "Musterstrasse 12", "58507", "Luedenscheid", "Deutschland"),
             [InvoiceLineItem.Create("SKU-CHAIR", "Chair", 1, 129.99m)]);
     }
 
@@ -62,6 +63,14 @@ public sealed class CreateInvoiceUseCaseTests
         public Task<Invoice?> FindAsync(Guid invoiceId, CancellationToken cancellationToken)
         {
             return Task.FromResult(Invoices.FirstOrDefault(invoice => invoice.InvoiceId == invoiceId));
+        }
+
+        public Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<Invoice>>(
+                Invoices
+                    .Where(invoice => string.Equals(invoice.CustomerEmail, customerEmail, StringComparison.OrdinalIgnoreCase))
+                    .ToArray());
         }
     }
 

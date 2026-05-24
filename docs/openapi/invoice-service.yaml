@@ -26,6 +26,19 @@ paths:
           description: Invalid event.
         "503":
           description: Invoice generation failed after retries.
+  /invoices:
+    get:
+      summary: Search persisted invoices by customer email.
+      parameters:
+        - name: customerEmail
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: Matching persisted invoices.
   /invoices/{invoiceId}:
     get:
       parameters:
@@ -40,6 +53,26 @@ paths:
           description: Invoice found.
         "404":
           description: Invoice not found.
+  /invoices/{invoiceId}/pdf:
+    get:
+      summary: Download the persisted invoice PDF.
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Invoice PDF.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Invoice PDF not found.
 components:
   parameters:
     CorrelationId:
@@ -79,10 +112,36 @@ components:
         customerEmail:
           type: string
           format: email
+        customer:
+          $ref: "#/components/schemas/CustomerDetails"
         items:
           type: array
           items:
             $ref: "#/components/schemas/InvoiceLineItem"
+    CustomerDetails:
+      type: object
+      required:
+        - name
+        - street
+        - postalCode
+        - city
+        - country
+      properties:
+        name:
+          type: string
+          example: Max Mustermann
+        street:
+          type: string
+          example: Musterstrasse 12
+        postalCode:
+          type: string
+          example: "58507"
+        city:
+          type: string
+          example: Luedenscheid
+        country:
+          type: string
+          example: Deutschland
     InvoiceLineItem:
       type: object
       required:

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audit Admin Dashboard</title>
+  <script>
+    window.adminConfig = {
+      auditBaseUrl: "",
+      invoiceBaseUrl: ""
+    };
+  </script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="title-block">
+      <p class="eyebrow">Online-Shop</p>
+      <h1>Audit Dashboard</h1>
+      <p class="subtitle">Fachliche Bestell-Timeline aus Audit-Events. Technische Logs liegen in Grafana.</p>
+    </div>
+    <div class="topbar-actions">
+      <a class="topbar-link" href="#inventoryAdmin">Bestand verwalten</a>
+      <a class="topbar-link" href="http://localhost:3000" target="_blank" rel="noreferrer">Grafana Logs</a>
+      <span id="lastRefresh">Noch nicht aktualisiert</span>
+      <button id="refreshButton" type="button">Aktualisieren</button>
+    </div>
+  </header>
+
+  <section class="stats" aria-label="Kennzahlen">
+    <article class="stat">
+      <span>Bestellungen</span>
+      <strong id="orderCount">0</strong>
+    </article>
+    <article class="stat">
+      <span>Fehlerhafte Prozesse</span>
+      <strong id="failureCount">0</strong>
+    </article>
+    <article class="stat">
+      <span>Services healthy</span>
+      <strong id="healthyCount">0 / 0</strong>
+    </article>
+  </section>
+
+  <section class="info-strip" aria-label="Werkzeuge">
+    <div>
+      <strong>Aufgabenteilung</strong>
+      <span>Admin zeigt fachliche Audit-Verläufe und erlaubt Bestandspflege über geschützte Admin-Endpunkte.</span>
+    </div>
+    <a href="#inventoryAdmin">Bestand produktionsnah verwalten</a>
+  </section>
+
+  <main class="layout">
+    <section class="surface">
+      <div class="panel-header">
+        <div>
+          <h2>Bestellungen</h2>
+          <p>Letzter bekannter Status pro correlationId</p>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="health-title">
+          <strong>Service-Zustand</strong>
+          <span id="healthUpdated">wird geladen</span>
+        </div>
+        <div id="serviceHealth" class="health-list"></div>
+      </div>
+
+      <div class="filters">
+        <label>
+          Status
+          <select id="statusFilter">
+            <option value="">Alle</option>
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="FAILURE">FAILURE</option>
+            <option value="COMPENSATED">COMPENSATED</option>
+          </select>
+        </label>
+        <label>
+          correlationId
+          <input id="correlationFilter" type="search" placeholder="ID suchen">
+        </label>
+      </div>
+
+      <div id="orders" class="orders"></div>
+    </section>
+
+    <section class="surface timeline-surface">
+      <div class="panel-header">
+        <div>
+          <h2>Audit-Timeline</h2>
+          <p id="selectedCorrelation">Keine Bestellung ausgewählt</p>
+        </div>
+        <button id="copyCorrelationButton" class="ghost-button" type="button" disabled>Kopieren</button>
+      </div>
+
+      <div class="manual-search">
+        <input id="manualCorrelationId" type="text" placeholder="correlationId eingeben">
+        <button id="loadTimelineButton" type="button">Laden</button>
+      </div>
+
+      <ol id="timeline" class="timeline"></ol>
+    </section>
+  </main>
+
+  <section id="inventoryAdmin" class="surface inventory-admin">
+    <div class="panel-header">
+      <div>
+        <h2>Warehouse-Bestand</h2>
+        <p>Produkte und Mengen über den Warehouse-Service pflegen</p>
+      </div>
+      <div class="panel-actions">
+        <span id="inventorySummary">0 Produkte</span>
+        <button id="reloadInventoryButton" class="ghost-button" type="button">Neu laden</button>
+      </div>
+    </div>
+
+    <form id="inventoryForm" class="inventory-form" autocomplete="off">
+      <div class="form-field product-id-field">
+        <label for="productId">Produkt-ID</label>
+        <input id="productId" type="text" placeholder="leer = automatisch">
+      </div>
+      <div class="form-field">
+        <label for="sku">SKU</label>
+        <input id="sku" type="text" placeholder="SKU-CHAIR-OAK">
+      </div>
+      <div class="form-field">
+        <label for="productName">Produktname</label>
+        <input id="productName" type="text" placeholder="Esszimmerstuhl Eiche">
+      </div>
+      <div class="form-field">
+        <label for="category">Kategorie</label>
+        <input id="category" type="text" placeholder="Stuehle">
+      </div>
+      <div class="form-field quantity-field">
+        <label for="availableQuantity">Bestand</label>
+        <input id="availableQuantity" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-actions">
+        <button type="submit">Speichern</button>
+        <button id="resetInventoryFormButton" class="ghost-button" type="button">Neu</button>
+      </div>
+    </form>
+    <p id="inventoryMessage" class="form-message"></p>
+
+    <div class="inventory-toolbar">
+      <label>
+        Suche
+        <input id="inventorySearch" type="search" placeholder="Name, SKU oder ID">
+      </label>
+      <label>
+        Kategorie
+        <select id="inventoryCategoryFilter">
+          <option value="">Alle Kategorien</option>
+        </select>
+      </label>
+      <label>
+        Pro Seite
+        <select id="inventoryPageSize">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="inventoryItems" class="inventory-list"></div>
+
+    <div class="pagination" aria-label="Bestand Pagination">
+      <button id="previousInventoryPageButton" class="ghost-button" type="button">Zurück</button>
+      <span id="inventoryPageInfo">Seite 1 / 1</span>
+      <button id="nextInventoryPageButton" class="ghost-button" type="button">Weiter</button>
+    </div>
+  </section>
+
+  <template id="orderTemplate">
+    <button class="order" type="button">
+      <span class="order-main">
+        <strong data-field="latestEventType"></strong>
+        <small data-field="correlationId"></small>
+        <em data-field="businessStatus"></em>
+      </span>
+      <span class="badge" data-field="latestStatusCode"></span>
+    </button>
+  </template>
+
+  <template id="timelineTemplate">
+    <li class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-title">
+          <strong data-field="eventType"></strong>
+          <span class="badge" data-field="statusCode"></span>
+        </div>
+        <p data-field="meta"></p>
+        <div class="event-links" data-field="links"></div>
+        <pre data-field="payload"></pre>
+      </div>
+    </li>
+  </template>
+
+  <template id="inventoryTemplate">
+    <article class="inventory-item">
+      <div>
+        <strong data-field="name"></strong>
+        <small data-field="meta"></small>
+        <code data-field="productId"></code>
+      </div>
+      <div class="stock-editor">
+        <input data-field="quantity" type="number" min="0">
+        <button data-action="stock" type="button">Bestand setzen</button>
+        <button data-action="edit" class="ghost-button" type="button">Bearbeiten</button>
+        <button data-action="delete" class="danger-button" type="button">Löschen</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
