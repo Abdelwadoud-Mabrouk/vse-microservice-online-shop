@@ -1,0 +1,42 @@
+![Payment](./images/payment-erd.png)
+
+erDiagram
+
+    PAYMENT ||--o{ PAYMENT_TRANSACTION : has
+
+    PAYMENT {
+        UUID payment_id PK
+        UUID correlation_id
+        UUID order_id
+        UUID user_id
+
+        DECIMAL amount
+        VARCHAR currency
+
+        VARCHAR payment_provider
+        VARCHAR status
+
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    PAYMENT_TRANSACTION {
+        UUID transaction_id PK
+        UUID payment_id FK
+
+        VARCHAR provider_status
+
+        VARCHAR payment_method_info
+        VARCHAR failure_reason
+
+        DECIMAL provider_fee
+
+        JSON raw_response
+
+        INT retry_count
+
+        TIMESTAMP created_at
+    }
+
+
+
