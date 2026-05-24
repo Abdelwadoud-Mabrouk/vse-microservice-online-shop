@@ -53,5 +53,10 @@ public sealed class GetAuditTimelineUseCaseTests
 
             return Task.FromResult(result);
         }
+
+        public Task<IReadOnlyList<OrderAuditSummaryDto>> ListOrderSummariesAsync(CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

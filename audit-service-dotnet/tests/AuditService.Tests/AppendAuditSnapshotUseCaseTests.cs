@@ -63,5 +63,25 @@ public sealed class AppendAuditSnapshotUseCaseTests
 
             return Task.FromResult(result);
         }
+
+        public Task<IReadOnlyList<OrderAuditSummaryDto>> ListOrderSummariesAsync(CancellationToken cancellationToken)
+        {
+            IReadOnlyList<OrderAuditSummaryDto> result = Snapshots
+                .GroupBy(snapshot => snapshot.CorrelationId)
+                .Select(group =>
+                {
+                    var latest = group.OrderByDescending(snapshot => snapshot.Timestamp).First();
+                    return new OrderAuditSummaryDto(
+                        latest.CorrelationId,
+                        latest.EventType,
+                        latest.StatusCode,
+                        latest.Service,
+                        latest.Timestamp,
+                        group.Count());
+                })
+                .ToArray();
+
+            return Task.FromResult(result);
+        }
     }
 }

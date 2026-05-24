@@ -6,6 +6,9 @@
     <RootNamespace>InvoiceService</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="2.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
   </ItemGroup>
 </Project>

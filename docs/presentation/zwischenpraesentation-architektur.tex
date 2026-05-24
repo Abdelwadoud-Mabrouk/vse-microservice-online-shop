@@ -1,0 +1,390 @@
+% Abdelwadoud Mabrouk
+% Master Präsentation Vorlage
+\documentclass[aspectratio=169,11pt]{beamer}
+
+% Zeichencodierung und Sprache
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{fontawesome5}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+
+% Beamer Theme
+\usetheme{CambridgeUS}
+\usecolortheme{dolphin}
+
+\definecolor{rowgray}{RGB}{245,245,245}
+\definecolor{rowblue}{RGB}{230,240,255}
+\definecolor{hsBlue}{RGB}{22,81,155}
+\definecolor{hsGray}{RGB}{90,90,90}
+
+\definecolor{ShopBlue}{HTML}{2563EB}
+\definecolor{JavaOrange}{HTML}{F97316}
+\definecolor{DotnetBlue}{HTML}{0EA5E9}
+\definecolor{InfraGray}{HTML}{64748B}
+\definecolor{AuditGreen}{HTML}{16A34A}
+\definecolor{WarnRed}{HTML}{DC2626}
+
+% Farbanpassungen
+\setbeamercolor{structure}{fg=hsBlue}
+\setbeamercolor{item}{fg=hsBlue}
+\setbeamercolor{frametitle}{fg=white,bg=hsBlue}
+\setbeamercolor{title}{fg=white,bg=hsBlue}
+
+\usefonttheme{professionalfonts}
+\setbeamertemplate{navigation symbols}{}
+
+% Logo oben rechts, falls Datei vorhanden ist.
+\logo{\IfFileExists{logo_Hochschule.png}{\includegraphics[width=2cm]{logo_Hochschule.png}}{}}
+
+\setbeamertemplate{footline}{
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=0.6\paperwidth,ht=2.5ex,dp=1ex,leftskip=0.3cm]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=0.4\paperwidth,ht=2.5ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}\textbf{Folie \insertframenumber{} / \inserttotalframenumber\hspace{0.6cm}}
+    \end{beamercolorbox}%
+  }%
+  \vskip0pt%
+}
+
+\tikzset{
+    service/.style={
+        rectangle,
+        rounded corners=2mm,
+        draw=#1,
+        thick,
+        fill=#1!10,
+        align=center,
+        minimum width=2.6cm,
+        minimum height=1.0cm,
+        font=\small
+    },
+    smallservice/.style={
+        rectangle,
+        rounded corners=2mm,
+        draw=#1,
+        thick,
+        fill=#1!10,
+        align=center,
+        minimum width=2.1cm,
+        minimum height=.82cm,
+        font=\scriptsize
+    },
+    db/.style={
+        cylinder,
+        shape border rotate=90,
+        aspect=.25,
+        draw=#1,
+        thick,
+        fill=#1!10,
+        align=center,
+        minimum width=1.8cm,
+        minimum height=1.05cm,
+        font=\small
+    },
+    arrow/.style={-{Latex[length=2.2mm]}, thick},
+    event/.style={-{Latex[length=2.2mm]}, thick, dashed},
+    note/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt}
+}
+
+% Metadaten
+\title[Online-Shop Architektur]{Microservice-orientierter Online-Shop}
+\subtitle{Zwischenpräsentation: Softwarearchitektur}
+\author{\textbf{Abdelwadoud Mabrouk, Mohammed Amine Grioui}}
+\institute{\textbf{Fachhochschule Südwestfalen}\\Vertiefung Software Engineering}
+\date{13. Juni 2026}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{Agenda}
+    \tableofcontents
+\end{frame}
+
+\section{Ziel}
+
+\begin{frame}{Ziel der Präsentation}
+    \begin{itemize}
+        \item Microservices sind durch die Aufgabe vorgegeben.
+        \item Wir erklären unsere Architekturentscheidungen innerhalb dieser Vorgabe.
+        \item Wichtig ist: Warum diese Technologien und Kommunikationswege?
+    \end{itemize}
+
+    \vspace{.5cm}
+    \begin{block}{Leitfrage}
+        Wie bauen wir den Online-Shop so, dass er verständlich, testbar und erweiterbar bleibt?
+    \end{block}
+\end{frame}
+
+\begin{frame}{Architekturentscheidungen}
+    \begin{tabular}{>{\bfseries}p{4.2cm}p{7.7cm}}
+        \toprule
+        Entscheidung & Begründung \\
+        \midrule
+        Java für Shop/Billing & passt gut für Web-APIs und bestehende Team-Aufteilung \\
+        .NET 10 für unsere Services & moderne Plattform, gute API-Unterstützung, klare Struktur \\
+        Clean Architecture & Businesslogik bleibt unabhängig von Frameworks \\
+        REST & direkte Antwort bei Lager und Zahlung \\
+        Kafka & entkoppelte Events, z. B. Rechnung nach Zahlung \\
+        PostgreSQL & zuverlässige Speicherung für Audit-Daten \\
+        \bottomrule
+    \end{tabular}
+\end{frame}
+
+\section{Systemüberblick}
+
+\begin{frame}{Systemkontext}
+    \centering
+    \resizebox{!}{.72\textheight}{
+    \begin{tikzpicture}[node distance=1.25cm and 1.35cm]
+        \node[service=WarnRed] (user) {User};
+
+        \node[service=ShopBlue, below=1.0cm of user] (shop) {Shop-Service\\Java};
+        \node[service=JavaOrange, right=1.35cm of shop] (billing) {Billing-Service\\Java};
+        \node[service=DotnetBlue, left=1.35cm of shop] (warehouse) {Warehouse-Service\\.NET};
+        \node[service=DotnetBlue, below=1.25cm of billing] (invoice) {Invoice-Service\\.NET};
+        \node[service=AuditGreen, below=1.25cm of shop] (audit) {Audit-Service\\.NET};
+
+        \node[service=InfraGray, below=1.15cm of warehouse] (kafka) {Kafka};
+        \node[db=InfraGray, below=1.15cm of audit] (postgres) {PostgreSQL};
+        \node[service=WarnRed, right=1.35cm of billing] (payment) {Payment-Provider\\Stub};
+
+        \draw[arrow] (user) -- node[note, right] {REST} (shop);
+        \draw[arrow] (shop) -- node[note, above] {REST} (warehouse);
+        \draw[arrow] (shop) -- node[note, above] {REST} (billing);
+        \draw[arrow] (billing) -- node[note, above] {REST} (payment);
+        \draw[event] (billing) |- node[note, right] {Event} (kafka);
+        \draw[event] (kafka) -| node[note, above] {Event} (invoice);
+
+        \draw[arrow] (shop) -- (audit);
+        \draw[arrow] (billing) -- (audit);
+        \draw[arrow] (warehouse) -- (audit);
+        \draw[arrow] (invoice) -- (audit);
+        \draw[arrow] (audit) -- node[note, right] {speichert} (postgres);
+    \end{tikzpicture}}
+\end{frame}
+
+\begin{frame}{Services und Aufgaben}
+    \small
+    \begin{tabular}{>{\bfseries}p{3.0cm}p{2.0cm}p{7.0cm}}
+        \toprule
+        Service & Technik & Aufgabe \\
+        \midrule
+        Shop & Java & Nimmt Bestellungen an und steuert den Ablauf \\
+        Billing & Java & Führt Zahlungen aus \\
+        Warehouse & .NET & Reserviert und bucht Lagerbestand \\
+        Invoice & .NET & Erstellt Rechnungen nach erfolgreicher Zahlung \\
+        Audit & .NET + PostgreSQL & Speichert wichtige Ereignisse dauerhaft \\
+        Kafka & Infrastruktur & Verteilt Events zwischen Services \\
+        \bottomrule
+    \end{tabular}
+\end{frame}
+
+\section{Technologie}
+
+\begin{frame}{Warum .NET 10 für unsere Services?}
+    \begin{itemize}
+        \item Wir setzen Warehouse, Invoice und Audit mit .NET 10 um.
+        \item .NET passt gut für schlanke REST-APIs.
+        \item Swagger, Dependency Injection und Tests sind direkt gut unterstützt.
+        \item Die Sprache C\# erlaubt klaren, gut lesbaren Code.
+    \end{itemize}
+
+    \vspace{.5cm}
+    \begin{block}{Entscheidung}
+        .NET 10 ist für unseren Teil pragmatisch: modern, stabil und gut testbar.
+    \end{block}
+\end{frame}
+
+\begin{frame}{Warum Clean Architecture?}
+    \begin{itemize}
+        \item Controller enthalten keine Businesslogik.
+        \item Use Cases beschreiben die fachlichen Abläufe.
+        \item Domain enthält die Regeln.
+        \item Infrastructure enthält Technik wie Datenbank, HTTP und Dateien.
+    \end{itemize}
+
+    \vspace{.5cm}
+    \begin{block}{Vorteil}
+        Wir können fachliche Logik testen, ohne echte Datenbank oder echte HTTP-Aufrufe zu brauchen.
+    \end{block}
+\end{frame}
+
+\section{Kommunikation}
+
+\begin{frame}{REST und Kafka}
+    \begin{columns}[T]
+        \begin{column}{.48\textwidth}
+            \begin{block}{REST}
+                \begin{itemize}
+                    \item direkte Anfrage
+                    \item direkte Antwort
+                    \item gut für Lager und Zahlung
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{.48\textwidth}
+            \begin{block}{Kafka}
+                \begin{itemize}
+                    \item asynchrone Events
+                    \item Services sind weniger gekoppelt
+                    \item gut für Rechnung
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{.5cm}
+    \begin{alertblock}{Warum beides?}
+        REST ist gut, wenn der Shop sofort eine Antwort braucht.
+        Kafka ist gut, wenn ein Schritt später im Hintergrund passieren kann.
+    \end{alertblock}
+\end{frame}
+
+\begin{frame}{Warum Kafka?}
+    \begin{itemize}
+        \item Kafka ist sinnvoll für Ereignisse, die nicht sofort beantwortet werden müssen.
+        \item Beispiel: Nach erfolgreicher Zahlung entsteht eine Rechnung.
+        \item Invoice-Service kann unabhängig vom Shop arbeiten.
+        \item Später können weitere Services dasselbe Event nutzen.
+    \end{itemize}
+
+    \vspace{.5cm}
+    \begin{block}{Beispiel}
+        Billing sendet \texttt{PaymentSucceeded}. Invoice hört darauf und erstellt die Rechnung.
+    \end{block}
+\end{frame}
+
+\section{Datenhaltung}
+
+\begin{frame}{Warum PostgreSQL für Audit?}
+    \begin{itemize}
+        \item Audit-Daten müssen zuverlässig gespeichert werden.
+        \item PostgreSQL ist stabil und gut geeignet für strukturierte Daten.
+        \item Die Timeline einer Bestellung kann einfach abgefragt werden.
+        \item Append-only Speicherung passt gut zum Audit-Prinzip.
+    \end{itemize}
+
+    \vspace{.5cm}
+    \begin{block}{Entscheidung}
+        Für Audit ist Konsistenz wichtiger als maximale Geschwindigkeit.
+        Deshalb verwenden wir PostgreSQL.
+    \end{block}
+\end{frame}
+
+\begin{frame}{Audit: Warum ist das wichtig?}
+    \begin{block}{Ziel}
+        Wir können später genau sehen, was mit einer Bestellung passiert ist.
+    \end{block}
+
+    \begin{itemize}
+        \item Jede Bestellung bekommt eine \texttt{correlationId}.
+        \item Alle Services schreiben Events mit dieser ID.
+        \item Dadurch entsteht eine Timeline der Bestellung.
+        \item Audit-Einträge werden nicht verändert.
+    \end{itemize}
+\end{frame}
+
+\section{Tests}
+
+\begin{frame}{Best Case und Worst Case}
+    \begin{columns}[T]
+        \begin{column}{.48\textwidth}
+            \begin{block}{Best Case}
+                \begin{itemize}
+                    \item Lager reserviert
+                    \item Zahlung erfolgreich
+                    \item Rechnung erstellt
+                    \item Bestellung abgeschlossen
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{.48\textwidth}
+            \begin{alertblock}{Worst Case}
+                \begin{itemize}
+                    \item Zahlung erfolgreich
+                    \item Warehouse-Commit schlägt fehl
+                    \item Refund wird ausgelöst
+                    \item Audit zeigt Fehler und Ausgleich
+                \end{itemize}
+            \end{alertblock}
+        \end{column}
+    \end{columns}
+
+    \vspace{.45cm}
+    \begin{block}{Warum wichtig?}
+        Die Architektur muss nicht nur im Erfolgsfall funktionieren, sondern auch bei Fehlern nachvollziehbar bleiben.
+    \end{block}
+\end{frame}
+
+\section{Stand}
+
+\begin{frame}{Aktueller Stand}
+    \begin{columns}[T]
+        \begin{column}{.48\textwidth}
+            \begin{block}{Fertig}
+                \begin{itemize}
+                    \item .NET-Services angelegt
+                    \item Swagger UI
+                    \item Docker Compose
+                    \item Audit mit PostgreSQL
+                    \item Unit-Tests grün
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{.48\textwidth}
+            \begin{alertblock}{Offen}
+                \begin{itemize}
+                    \item Kafka im Code anbinden
+                    \item Logging verbessern
+                    \item Integrationstests
+                    \item Abstimmung mit Java-Services
+                \end{itemize}
+            \end{alertblock}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Nächste Schritte}
+    \begin{enumerate}
+        \item Java- und .NET-Services verbinden.
+        \item Kafka-Event \texttt{PaymentSucceeded} umsetzen.
+        \item Logging mit \texttt{correlationId} ergänzen.
+        \item Happy Path und Fehlerfälle testen.
+        \item Bericht und Demo vorbereiten.
+    \end{enumerate}
+
+    \vspace{.5cm}
+    \begin{block}{Priorität}
+        Zuerst die Integration stabil machen. Danach Tests und Dokumentation verbessern.
+    \end{block}
+\end{frame}
+
+\begin{frame}{Zusammenfassung}
+    \begin{itemize}
+        \item Microservices sind die Vorgabe der Aufgabe.
+        \item Unsere Entscheidungen sind: .NET 10, Clean Architecture, REST, Kafka und PostgreSQL.
+        \item REST nutzen wir für direkte Entscheidungen.
+        \item Kafka nutzen wir für entkoppelte Hintergrundprozesse.
+        \item PostgreSQL nutzen wir für nachvollziehbare Audit-Daten.
+    \end{itemize}
+
+    \vspace{.7cm}
+    \centering
+    {\Large Fragen?}
+\end{frame}
+
+\end{document}

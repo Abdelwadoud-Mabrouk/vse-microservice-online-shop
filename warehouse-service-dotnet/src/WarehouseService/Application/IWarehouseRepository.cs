@@ -4,7 +4,17 @@ namespace WarehouseService.Application;
 
 public interface IWarehouseRepository
 {
-    IReadOnlyDictionary<string, int> GetInventory();
+    IReadOnlyList<InventoryItemDto> GetInventory();
+
+    InventoryItemDto? FindInventoryItem(Guid productId);
+
+    InventoryChangeResult AddInventoryItem(SaveInventoryItemCommand command);
+
+    InventoryChangeResult UpdateInventoryItem(SaveInventoryItemCommand command);
+
+    InventoryChangeResult SetStockQuantity(SetStockQuantityCommand command);
+
+    InventoryChangeResult RemoveInventoryItem(Guid productId);
 
     ReservationResult TryReserve(ReserveStockCommand command);
 

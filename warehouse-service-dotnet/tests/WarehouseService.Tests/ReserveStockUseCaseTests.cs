@@ -5,6 +5,8 @@ namespace WarehouseService.Tests;
 
 public sealed class ReserveStockUseCaseTests
 {
+    private static readonly Guid DeskId = Guid.Parse("22222222-2222-4222-8222-222222222222");
+
     [Fact]
     public async Task ExecuteAsync_WhenReservationSucceeds_WritesSuccessAuditEvent()
     {
@@ -16,7 +18,7 @@ public sealed class ReserveStockUseCaseTests
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
-                [ReservationItem.Create("SKU-DESK", 1)],
+                [ReservationItem.Create(DeskId, "SKU-DESK", 1)],
                 ReservationStatus.Reserved,
                 DateTimeOffset.UtcNow,
                 null)));
@@ -26,7 +28,7 @@ public sealed class ReserveStockUseCaseTests
         var result = await useCase.ExecuteAsync(new ReserveStockCommand(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            [ReservationItem.Create("SKU-DESK", 1)]), CancellationToken.None);
+            [ReservationItem.Create(DeskId, "SKU-DESK", 1)]), CancellationToken.None);
 
         Assert.True(result.Success);
         Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_RESERVED" && item.StatusCode == "SUCCESS");
@@ -42,7 +44,7 @@ public sealed class ReserveStockUseCaseTests
         var result = await useCase.ExecuteAsync(new ReserveStockCommand(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            [ReservationItem.Create("SKU-DESK", 10)]), CancellationToken.None);
+            [ReservationItem.Create(DeskId, "SKU-DESK", 10)]), CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_OUT_OF_STOCK" && item.StatusCode == "FAILURE");
@@ -61,7 +63,21 @@ public sealed class ReserveStockUseCaseTests
 
     private sealed class StubWarehouseRepository(ReservationResult result) : IWarehouseRepository
     {
-        public IReadOnlyDictionary<string, int> GetInventory() => new Dictionary<string, int>();
+        public IReadOnlyList<InventoryItemDto> GetInventory() => [];
+
+        public InventoryItemDto? FindInventoryItem(Guid productId) => null;
+
+        public InventoryChangeResult AddInventoryItem(SaveInventoryItemCommand command) =>
+            new(false, "not implemented", null);
+
+        public InventoryChangeResult UpdateInventoryItem(SaveInventoryItemCommand command) =>
+            new(false, "not implemented", null);
+
+        public InventoryChangeResult SetStockQuantity(SetStockQuantityCommand command) =>
+            new(false, "not implemented", null);
+
+        public InventoryChangeResult RemoveInventoryItem(Guid productId) =>
+            new(false, "not implemented", null);
 
         public ReservationResult TryReserve(ReserveStockCommand command) => result;
 

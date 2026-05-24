@@ -8,6 +8,7 @@ public sealed record Invoice(
     decimal Amount,
     string Currency,
     string CustomerEmail,
+    CustomerDetails Customer,
     IReadOnlyList<InvoiceLineItem> Items,
     DateTimeOffset CreatedAt,
     string DocumentPath)
@@ -22,6 +23,7 @@ public sealed record Invoice(
             payment.Amount,
             payment.Currency,
             payment.CustomerEmail,
+            payment.Customer,
             payment.Items,
             DateTimeOffset.UtcNow,
             string.Empty);

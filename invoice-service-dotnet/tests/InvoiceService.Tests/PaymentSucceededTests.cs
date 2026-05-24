@@ -14,6 +14,7 @@ public sealed class PaymentSucceededTests
             42m,
             " eur ",
             "customer@example.com",
+            NewCustomer(),
             [InvoiceLineItem.Create("SKU-LAMP", "Lamp", 1, 42m)]);
 
         Assert.Equal("EUR", payment.Currency);
@@ -31,6 +32,18 @@ public sealed class PaymentSucceededTests
             42m,
             "EUR",
             "customer@example.com",
+            NewCustomer(),
             []));
+    }
+
+    private static CustomerDetails NewCustomer()
+    {
+        return CustomerDetails.Create(
+            "Max Mustermann",
+            "customer@example.com",
+            "Musterstrasse 12",
+            "58507",
+            "Luedenscheid",
+            "Deutschland");
     }
 }

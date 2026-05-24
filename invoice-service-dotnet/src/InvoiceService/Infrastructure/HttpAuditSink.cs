@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using InvoiceService.Application;
 
@@ -9,6 +10,16 @@ public sealed class HttpAuditSink(HttpClient httpClient, IConfiguration configur
 
     public async Task RecordAsync(Guid correlationId, string eventType, string statusCode, object payload, CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+        using var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["service"] = "invoice-service",
+            ["correlationId"] = correlationId,
+            ["operation"] = "audit.sink.write",
+            ["eventType"] = eventType,
+            ["status"] = statusCode
+        });
+
         try
         {
             var request = new
@@ -21,11 +32,33 @@ public sealed class HttpAuditSink(HttpClient httpClient, IConfiguration configur
                 statusCode
             };
 
-            await httpClient.PostAsJsonAsync($"{_baseUrl}/audit/events", request, cancellationToken);
+            using var response = await httpClient.PostAsJsonAsync($"{_baseUrl}/audit/events", request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Audit sink write failed with status {Status}, errorCode {ErrorCode}, httpStatus {HttpStatus}, durationMs {DurationMs}",
+                    "INTEGRATION_FAILED",
+                    "AUDIT_SERVICE_REJECTED_EVENT",
+                    (int)response.StatusCode,
+                    stopwatch.ElapsedMilliseconds);
+                return;
+            }
+
+            logger.LogInformation(
+                "Audit event {EventType} written with status {Status} in {DurationMs} ms",
+                eventType,
+                "SUCCESS",
+                stopwatch.ElapsedMilliseconds);
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Could not write audit snapshot for {EventType}", eventType);
+            logger.LogWarning(
+                exception,
+                "Audit sink write failed with status {Status}, errorCode {ErrorCode}, exceptionType {ExceptionType}, durationMs {DurationMs}",
+                "INTEGRATION_FAILED",
+                "AUDIT_SERVICE_UNAVAILABLE",
+                exception.GetType().Name,
+                stopwatch.ElapsedMilliseconds);
         }
     }
 }
