@@ -1,0 +1,19 @@
+package com.vseonlineshop.payment.event.payment;
+
+
+import com.vseonlineshop.payment.enums.PaymentProvider;
+import com.vseonlineshop.payment.enums.PaymentStatus;
+
+import java.util.UUID;
+
+public record PaymentInitialedPayload(
+        UUID paymentId,
+        UUID orderId,
+        UUID correlationId,
+        UUID userId,
+        PaymentProvider paymentProvider,
+        String currency,
+        PaymentStatus paymentStatus
+
+) {
+}
