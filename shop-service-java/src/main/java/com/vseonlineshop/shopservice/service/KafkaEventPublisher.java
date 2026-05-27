@@ -3,7 +3,7 @@ package com.vseonlineshop.shopservice.service;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderItem;
-import com.vseonlineshop.shopservice.event.*;
+import com.vseonlineshop.shopservice.event.dtos.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +26,9 @@ public class KafkaEventPublisher {
 
     @Value("${kafka.topics.orders}")
     private String ordersTopic;
+
+    @Value("${kafka.topics.alerts}")
+    private String alertTopic;
 
 
     public void publishOrderCreated(Order order) {
@@ -70,6 +73,12 @@ public class KafkaEventPublisher {
     }
 
 
+    public void publishSystemAlert(Order order, SystemAlertPayload payload) {
+        send(alertTopic, order, "SYSTEM_ALERT", payload);
+    }
+
+    // ── SYSTEM_ALERT ──────────────────────────────────────────────────────────
+
     private void send(String topic, Order order, String eventType, Object payload) {
         var event = DomainEvent.of(eventType, "shop-service", order.getCorrelationId(), payload);
 
@@ -88,4 +97,6 @@ public class KafkaEventPublisher {
                     }
                 });
     }
+
+
 }
