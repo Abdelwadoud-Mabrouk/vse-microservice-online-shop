@@ -12,7 +12,6 @@ import java.util.UUID;
 
 public record OrderResponse(
     UUID id,
-    /** correlationId wird NICHT zurückgegeben – intern */
     UUID userId,
     String paymentId,
     OrderStatus status,
@@ -21,5 +20,6 @@ public record OrderResponse(
     PaymentProvider paymentProvider,
     List<OrderItemResponse> items,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    String approvalUrl
 ) {}

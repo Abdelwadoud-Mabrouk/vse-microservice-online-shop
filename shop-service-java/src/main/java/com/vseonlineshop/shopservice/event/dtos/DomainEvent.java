@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.event;
+package com.vseonlineshop.shopservice.event.dtos;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

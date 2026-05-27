@@ -10,6 +10,7 @@ import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
 import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
 import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
 import com.vseonlineshop.shopservice.dto.warehouse.*;
+import com.vseonlineshop.shopservice.event.dtos.SystemAlertPayload;
 import com.vseonlineshop.shopservice.exception.BusinessException;
 import com.vseonlineshop.shopservice.exception.OrderNotFoundException;
 import com.vseonlineshop.shopservice.exception.PaymentServiceException;
@@ -24,7 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,73 +44,80 @@ public class OrderApplicationService {
     private final PaymentClient paymentClient;
     private final KafkaEventPublisher kafkaEventPublisher;
     private final ProductRepository productRepository;
+    private final OrderTransactionHelper orderTransactionHelper;
 
     // ── Create Order ─────────────────────────────────────────────────────────
-
     public OrderResponse createOrder(OrderRequest request) {
+        Order order;
 
-        // ── 1. Order PENDING anlegen ─────────────────────────────────────────
-        UUID correlationId = UUID.randomUUID();
-        Order order = buildInitialOrder(request, correlationId);
-        order = orderRepository.save(order);
-        log.info("[OrderService] Order {} angelegt (correlationId={})", order.getId(), correlationId);
-
-        // ── Kafka: OrderCreated (fire & forget) ──────────────────────────────
-        Order finalOrder = order;
-        safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
-
-
-        // ── 2. Warehouse reservieren ─────────────────────────────────────────
-        ReservationResponse reservation;
+        // ── STEP 1: Initiales Anlegen ───────────────────
         try {
-            reservation = warehouseClient.reserve(order);
-            log.info("[OrderService] Warehouse-Reservierung erhalten, reservationId={}",
-                    reservation.reservationId());
-        } catch (RestClientException ex) {
-            log.error("[WAREHOUSE ERROR] Warehouse unreachable for Order {}", order.getId(), ex);
+            order = orderTransactionHelper.createInitialOrder(request);
+            log.info("[OrderService] Order {} angelegt (correlationId={})", order.getId(), order.getCorrelationId());
 
-            // ── Kafka: OrderCompleted (fire & forget) ─────────────────────────────
-            cancelOrder(order, null, "WAREHOUSE_SERVICE_UNAVAILABLE");
-            throw new ServiceUnavailableException(
-                    "WAREHOUSE_SERVICE_UNAVAILABLE",
-                    "Das Warenlager ist derzeit nicht erreichbar."
-            );
+            Order finalOrder = order;
+            safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
+        } catch (Exception ex) {
+            log.error("[CRITICAL] Konnte initiale Order nicht in DB anlegen: {}", ex.getMessage());
+            cancelOrder(null, null, "CREATION_ORDER_FAILED", ex);
+            throw new ServiceUnavailableException("DATABASE_ERROR", "Bestellung konnte nicht angelegt werden.");
         }
 
-        // ── Validierung der Warehouse-Antwort ─────────────────────────────────
-        if (reservation.items() == null || reservation.items().isEmpty()) {
-            log.warn("[OrderService] Warehouse returned empty items for Order {}", order.getId());
-            cancelOrder(order, null, "EMPTY_RESERVATION");
-            throw new BusinessException("Warehouse returned an empty reservation response.");
+        ReservationResponse reservation = null;
+
+        try {
+            // STEP 2: Warehouse reservieren
+            try {
+                reservation = warehouseClient.reserve(order);
+            } catch (RestClientException ex) {
+                log.error("[WAREHOUSE ERROR] Warehouse unreachable for Order {}", order.getId(), ex);
+                cancelOrder(order, null, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
+                throw new ServiceUnavailableException("WAREHOUSE_SERVICE_UNAVAILABLE", "Lager offline.");
+            }
+
+            if (reservation.items() == null || reservation.items().isEmpty()) {
+                cancelOrder(order, null, "EMPTY_RESERVATION", null);
+                throw new BusinessException("Warehouse returned empty items.");
+            }
+
+            // STEP 3: Total berechnen & Update auf PROCESSING
+            BigDecimal total = calculateTotal(order.getItems());
+
+            order = orderTransactionHelper.updateToProcessing(order.getId(), total);
+
+            // STEP 4: Payment aufrufen
+            PaymentResponse payment;
+            try {
+                payment = paymentClient.pay(order);
+            } catch (RestClientException ex) {
+                log.error("[PAYMENT ERROR] Payment-Service unreachable for Order {}", order.getId(), ex);
+                cancelOrder(order, reservation.orderId(), "PAYMENT_SERVICE_UNAVAILABLE", ex);
+                throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice offline.");
+            }
+
+            // Fall 1: Sofortiger Zahlungsfehler vom Provider
+            if ("FAILED".equalsIgnoreCase(String.valueOf(payment.status()))) {
+                cancelOrder(order, reservation.orderId(), "PAYMENT_FAILED", null);
+                throw new PaymentServiceException("Zahlung fehlgeschlagen.");
+            }
+
+            // Fall 2: Erfolg / PENDING -> Update auf AWAITING_PAYMENT
+            return orderTransactionHelper.updateToAwaitingPayment(order.getId(), payment);
+
+        } catch (Exception ex) {
+            log.error("[FATAL CRASH] Unerwarteter Fehler im Order-Prozess für Order {}", order.getId(), ex);
+
+
+            if (!(ex instanceof ServiceUnavailableException || ex instanceof BusinessException || ex instanceof PaymentServiceException)) {
+
+                UUID resId = (reservation != null) ? reservation.orderId() : null;
+
+                cancelOrder(order, resId, "ORDER_PROCESSING_INTERNAL_ERROR", ex);
+                throw new ServiceUnavailableException("INTERNAL_SYSTEM_ERROR", "Ein interner Fehler ist aufgetreten. Bestellung storniert.");
+            }
+
+            throw ex;
         }
-
-        // ── 3. Total berechnen ────────────────────────────────────────────────
-        BigDecimal total = calculateTotal(order.getItems());
-        order.setTotalAmount(total);
-        order.setStatus(OrderStatus.PROCESSING);
-        order = orderRepository.save(order);
-        log.info("[OrderService] totalAmount={} {}", total, order.getCurrency());
-
-        // ── 4. Payment ────────────────────────────────────────────────────────
-        PaymentResponse payment = paymentClient.pay(order);
-
-        if (!"CONFIRMED".equalsIgnoreCase(payment.status())) {
-            // ── Kafka: OrderCompleted (fire & forget) ─────────────────────────────
-            cancelOrder(order, reservation.orderId(), "PAYMENT_FAILED");
-            throw new PaymentServiceException("Zahlung fehlgeschlagen – Status: " + payment.status());
-        }
-
-        // ── 5. Order COMPLETED ────────────────────────────────────────────────
-        order.setStatus(OrderStatus.COMPLETED);
-        order.setPaymentId(payment.paymentId());
-        order = orderRepository.save(order);
-        log.info("[OrderService] Order {} COMPLETED, paymentId={}", order.getId(), order.getPaymentId());
-
-        // ── Kafka: OrderCompleted (fire & forget) ─────────────────────────────
-        Order finalOrder1 = order;
-        safePublish(() -> kafkaEventPublisher.publishOrderCompleted(finalOrder1));
-
-        return toResponse(order);
     }
 
     // ── Get Order ─────────────────────────────────────────────────────────────
@@ -119,35 +130,6 @@ public class OrderApplicationService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private Order buildInitialOrder(OrderRequest request, UUID correlationId) {
-        Order order = new Order();
-        order.setCorrelationId(correlationId);
-        order.setUserId(request.userId());
-        order.setCurrency(request.currency());
-        order.setPaymentProvider(request.paymentProvider());
-        order.setStatus(OrderStatus.PENDING);
-        order.setTotalAmount(BigDecimal.ZERO);
-
-        for (ItemRequest whItem : request.items()) {
-            OrderItem item = new OrderItem();
-            item.setOrder(order);
-            item.setProductId(whItem.productId());
-            item.setQuantity(whItem.quantity());
-            Optional<Product> optionalProduct = productRepository.findById(whItem.productId());
-            if (optionalProduct.isPresent()) {
-                Product product = optionalProduct.get();
-                BigDecimal securePriceFromShopDb = product.getPrice();
-                item.setPricePerUnit(securePriceFromShopDb);
-                BigDecimal subTotal = securePriceFromShopDb.multiply(BigDecimal.valueOf(whItem.quantity()));
-                item.setSubTotal(subTotal);
-                item.setProductName(product.getName());
-            }
-            order.addItem(item);
-        }
-        return order;
-    }
-
 
     private BigDecimal calculateTotal(List<OrderItem> items) {
         return items.stream()
@@ -177,20 +159,45 @@ public class OrderApplicationService {
                 order.getPaymentProvider(),
                 itemResponses,
                 order.getCreatedAt(),
-                order.getUpdatedAt()
+                order.getUpdatedAt(),
+                null
         );
     }
 
-    private void cancelOrder(Order order, UUID reservationOrderId, String reason) {
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+    private void cancelOrder(Order order, UUID reservationOrderId, String reason, Throwable exception) {
 
-        safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
+        if (order != null) {
+            try {
+                order.setStatus(OrderStatus.CANCELLED);
+                order.setUpdatedAt(LocalDateTime.now());
+                orderRepository.save(order);
+                log.info("[OrderService] Order {} in DB erfolgreich storniert.", order.getId());
+            } catch (Exception dbEx) {
+                log.error("[CRITICAL DB ERROR] Konnte Status in DB nicht auf CANCELLED setzen, da die DB blockiert/down ist! Führe Kafka-Rollback trotzdem fort.", dbEx);
+            }
 
-        if (reservationOrderId != null) {
-            safePublish(() -> kafkaEventPublisher
-                    .publishReservationRollbackRequested(order, reservationOrderId));
+            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
+
+            if (reservationOrderId != null) {
+                log.info("[OrderService] Trigger Rollback für Warehouse Reservation: {}", reservationOrderId);
+                safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(order, reservationOrderId));
+            }
         }
+        Map<String, String> metadata = Map.of(
+                "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
+                "exceptionClass", exception != null ? exception.getClass().getSimpleName() : "Unknown"
+        );
+
+        SystemAlertPayload alertPayload = new SystemAlertPayload(
+                UUID.randomUUID().toString(),
+                "shop-service",
+                order != null ? order.getId().toString() : "N/A",
+                "Kritischer Ausfall! Grund: " + reason + " | Details: " + (exception != null ? exception.getMessage() : "Keine"),
+                Instant.now(),
+                metadata
+        );
+
+        safePublish(() -> kafkaEventPublisher.publishSystemAlert(order, alertPayload));
     }
 
     private void safePublish(Runnable publishAction) {
@@ -201,4 +208,5 @@ public class OrderApplicationService {
             log.error("[Kafka] Event konnte nicht gesendet werden: {}", e.getMessage(), e);
         }
     }
+
 }
