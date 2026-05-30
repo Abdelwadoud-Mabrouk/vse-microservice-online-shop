@@ -9,22 +9,25 @@ import com.vseonlineshop.payment.exception.PaymentServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Slf4j
-@Component
+@Service
 public class StripePaymentStrategy implements PaymentStrategy {
 
 
-    @Value("${stripe.secret.key}")
-    private String stripeSecretKey;
+    private final StripeClient stripeClient;
+    private final String successPageUrl;
 
-    @Value("${success.page}")
-    private String successPageUrl;
+    public StripePaymentStrategy(
+            @Value("${stripe.secret.key}") String stripeSecretKey,
+            @Value("${success.page}") String successPageUrl) {
 
-    private final StripeClient stripeClient =
-            new StripeClient("sk_test_51TbeUUQA7jZQgiePERmuTksCYeuiatkyai5Ewv5cSpLnR71GQYb282Mmk0CPWWGpwI6r6bPMpmYqWer57xZif6pl00fVxqVwpj");
+        this.successPageUrl = successPageUrl;
+        this.stripeClient = new StripeClient(stripeSecretKey);
+    }
 
 
     @Override
@@ -43,7 +46,8 @@ public class StripePaymentStrategy implements PaymentStrategy {
         try {
             SessionCreateParams.Builder sessionBuilder = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl("http://127.0.0.1:5500/success.html")
+                   // .setSuccessUrl("http://127.0.0.1:5500/success.html")
+                    .setSuccessUrl(successPageUrl)
                     .setPaymentIntentData(
                             SessionCreateParams.PaymentIntentData.builder()
                                     .putMetadata("paymentId",     paymentId.toString())

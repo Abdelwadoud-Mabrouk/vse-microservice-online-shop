@@ -2,7 +2,6 @@
 
 
 import com.vseonlineshop.payment.dto.PaymentMethod;
-import com.vseonlineshop.payment.enums.PaymentProvider;
 
 import java.math.BigDecimal;
 import java.util.UUID;

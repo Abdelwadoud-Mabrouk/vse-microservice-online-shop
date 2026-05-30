@@ -1,6 +1,6 @@
 package com.vseonlineshop.payment.dto;
 
-import jakarta.persistence.*;
+
 import lombok.Data;
 
 import java.math.BigDecimal;

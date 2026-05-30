@@ -1,6 +1,11 @@
 package com.vseonlineshop.payment.webhook;
 
+import com.stripe.StripeClient;
+import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Event;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,32 +16,31 @@ import org.springframework.stereotype.Component;
 @Component
 public class WebhookVerifier {
 
-    /**
-     * PayPal Signatur-Verifizierung.
-     * In Production: PayPal SDK WebhookEvent.validateReceivedEvent() verwenden.
-     * Doku: https://developer.paypal.com/docs/api-basics/notifications/webhooks/notification-messages/
-     */
-    public boolean verifyPaypal(String transmissionId,
-                                 String transmissionSig,
-                                 String certUrl,
-                                 String authAlgo,
-                                 Object payload) {
-        // TODO Production:
-        // APIContext apiContext = new APIContext(clientId, clientSecret, "live");
-        // WebhookEvent.validateReceivedEvent(apiContext, headers, body, webhookId);
+    @Value("${stripe.webhook.secret}")
+    private String endpointSecret;
 
-        // Sandbox/Test: immer true
-        log.debug("[VERIFIER] PayPal Signatur-Check transmissionId={}", transmissionId);
-        return true;
+    @Value("${stripe.secret.key}")
+    private String stripeSecretKey;
+
+    private StripeClient stripeClient;
+
+    @PostConstruct
+    public void init() {
+        this.stripeClient = new StripeClient(stripeSecretKey);
     }
 
-    /**
-     * Stripe Signatur-Verifizierung.
-     * In Production: Webhook.constructEvent(payload, sigHeader, endpointSecret)
-     */
-    public boolean verifyStripe(String rawBody, String sigHeader) {
-        // TODO Production:
-        // Event event = Webhook.constructEvent(rawBody, sigHeader, endpointSecret);
-        return true;
+
+    public Event verifyStripe(String payload, String sigHeader)
+            throws SignatureVerificationException {
+
+        if (sigHeader == null) {
+            throw new IllegalArgumentException("Missing Stripe-Signature header");
+        }
+
+        return stripeClient.constructEvent(
+                payload,
+                sigHeader,
+                endpointSecret
+        );
     }
 }
