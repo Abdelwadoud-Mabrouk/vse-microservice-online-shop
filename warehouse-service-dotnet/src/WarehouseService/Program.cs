@@ -12,6 +12,8 @@ builder.Services.AddWarehousePersistence(builder.Configuration);
 
 var app = builder.Build();
 
+await app.InitializeWarehouseDatabaseAsync();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<CorrelationIdMiddleware>();
