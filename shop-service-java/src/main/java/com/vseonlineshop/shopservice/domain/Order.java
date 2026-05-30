@@ -1,6 +1,7 @@
 package com.vseonlineshop.shopservice.domain;
 
 
+import com.vseonlineshop.shopservice.dto.payment.PaymentMethod;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,7 +40,7 @@ public class Order {
     private BigDecimal totalAmount;
 
     @Column(name = "payment_provider", nullable = false)
-    private PaymentProvider paymentProvider;
+    private PaymentMethod paymentMethod;
 
     @Column(nullable = false)
     private String currency = "EUR";

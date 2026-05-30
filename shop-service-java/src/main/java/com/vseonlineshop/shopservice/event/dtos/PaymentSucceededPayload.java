@@ -2,7 +2,7 @@ package com.vseonlineshop.shopservice.event.dtos;
 
 
 
-import com.vseonlineshop.shopservice.domain.PaymentProvider;
+import com.vseonlineshop.shopservice.dto.payment.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -12,7 +12,7 @@ public record PaymentSucceededPayload(
     UUID orderId,
     UUID correlationId,
     UUID userId,
-    PaymentProvider paymentProvider,
+    PaymentMethod paymentMethod,
     BigDecimal amount,
     String currency,
     String providerTransactionId,

@@ -32,6 +32,7 @@ public class PaymentEventConsumer {
     /**
      * Hört auf das Payment-Topic und fängt die asynchrone Erfolgsmeldung ab.
      */
+
     @KafkaListener(
             topics = "${kafka.topics.payment}",
             groupId = "shop-order-service-group"
@@ -49,7 +50,7 @@ public class PaymentEventConsumer {
     }
 
     private void handlePaymentSucceeded(DomainEvent<?> domainEvent) {
-        Order order=null;
+        Order order = null;
         try {
             PaymentSucceededPayload payload = objectMapper.convertValue(
                     domainEvent.payload(),
@@ -80,7 +81,7 @@ public class PaymentEventConsumer {
 
             Map<String, String> metadata = Map.of(
                     "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
-                    "exceptionClass",  ex.getClass().getSimpleName()
+                    "exceptionClass", ex.getClass().getSimpleName()
             );
 
             SystemAlertPayload alertPayload = new SystemAlertPayload(

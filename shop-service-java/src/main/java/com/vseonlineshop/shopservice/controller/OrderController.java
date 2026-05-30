@@ -15,6 +15,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/orders")
 @Slf4j
+@CrossOrigin("*")
 public class OrderController {
 
     private final OrderApplicationService orderApplicationService;
@@ -26,7 +27,7 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<OrderResponse> checkout(@Valid @RequestBody OrderRequest request) {
         log.info("[OrderController] Neue Order-Anfrage, userId={}, provider={}, items={}",
-                request.userId(), request.paymentProvider(), request.items().size());
+                request.userId(), request.paymentMethod(), request.items().size());
 
         OrderResponse response = orderApplicationService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

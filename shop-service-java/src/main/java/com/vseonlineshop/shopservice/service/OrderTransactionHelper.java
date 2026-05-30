@@ -59,7 +59,7 @@ public class OrderTransactionHelper {
         order.setCorrelationId(correlationId);
         order.setUserId(request.userId());
         order.setCurrency(request.currency());
-        order.setPaymentProvider(request.paymentProvider());
+        order.setPaymentMethod(request.paymentMethod());
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(BigDecimal.ZERO);
 
@@ -83,38 +83,6 @@ public class OrderTransactionHelper {
     }
 
 
-    private BigDecimal calculateTotal(List<OrderItem> items) {
-        return items.stream()
-                .map(OrderItem::getSubTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-
-    private OrderResponse toResponse(Order order) {
-        List<OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getProductName(),
-                        item.getQuantity(),
-                        item.getPricePerUnit(),
-                        item.getSubTotal()
-                ))
-                .toList();
-
-        return new OrderResponse(
-                order.getId(),
-                order.getUserId(),
-                order.getPaymentId(),
-                order.getStatus(),
-                order.getTotalAmount(),
-                order.getCurrency(),
-                order.getPaymentProvider(),
-                itemResponses,
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                null
-        );
-    }
 
     private OrderResponse toResponse(Order order, String url) {
         List<OrderItemResponse> itemResponses = order.getItems().stream()
@@ -134,7 +102,7 @@ public class OrderTransactionHelper {
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCurrency(),
-                order.getPaymentProvider(),
+                order.getPaymentMethod(),
                 itemResponses,
                 order.getCreatedAt(),
                 order.getUpdatedAt(),

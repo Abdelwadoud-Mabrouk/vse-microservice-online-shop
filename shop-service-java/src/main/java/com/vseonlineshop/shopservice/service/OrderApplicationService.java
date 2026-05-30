@@ -20,6 +20,7 @@ import com.vseonlineshop.shopservice.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
@@ -43,8 +44,8 @@ public class OrderApplicationService {
     private final WarehouseClient warehouseClient;
     private final PaymentClient paymentClient;
     private final KafkaEventPublisher kafkaEventPublisher;
-    private final ProductRepository productRepository;
     private final OrderTransactionHelper orderTransactionHelper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     // ── Create Order ─────────────────────────────────────────────────────────
     public OrderResponse createOrder(OrderRequest request) {
@@ -54,7 +55,13 @@ public class OrderApplicationService {
         try {
             order = orderTransactionHelper.createInitialOrder(request);
             log.info("[OrderService] Order {} angelegt (correlationId={})", order.getId(), order.getCorrelationId());
+            var future = kafkaTemplate.send(
+                    "topic",
+                    order.getId().toString(),
+                    "event"
+            );
 
+            future.get();
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
         } catch (Exception ex) {
@@ -156,7 +163,7 @@ public class OrderApplicationService {
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCurrency(),
-                order.getPaymentProvider(),
+                order.getPaymentMethod(),
                 itemResponses,
                 order.getCreatedAt(),
                 order.getUpdatedAt(),

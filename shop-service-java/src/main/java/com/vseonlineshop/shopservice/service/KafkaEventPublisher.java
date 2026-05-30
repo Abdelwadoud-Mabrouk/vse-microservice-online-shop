@@ -38,7 +38,7 @@ public class KafkaEventPublisher {
                 order.getUserId(),
                 order.getItems().stream().map(OrderItem::getProductId).toList(),
                 order.getCurrency(),
-                order.getPaymentProvider().name()
+                order.getPaymentMethod().name()
         );
         send(ordersTopic, order, "ORDER_CREATED", payload);
     }
@@ -59,7 +59,7 @@ public class KafkaEventPublisher {
                 order.getPaymentId(),
                 order.getTotalAmount(),
                 order.getCurrency(),
-                order.getPaymentProvider().name()
+                order.getPaymentMethod().name()
         );
         send(ordersTopic, order, "ORDER_COMPLETED", payload);
     }

@@ -3,7 +3,7 @@ package com.vseonlineshop.shopservice.dto.shop;
 
 
 import com.vseonlineshop.shopservice.domain.OrderStatus;
-import com.vseonlineshop.shopservice.domain.PaymentProvider;
+import com.vseonlineshop.shopservice.dto.payment.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -17,7 +17,7 @@ public record OrderResponse(
     OrderStatus status,
     BigDecimal totalAmount,
     String currency,
-    PaymentProvider paymentProvider,
+    PaymentMethod paymentProvider,
     List<OrderItemResponse> items,
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
