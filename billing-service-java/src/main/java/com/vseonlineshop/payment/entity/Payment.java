@@ -1,6 +1,6 @@
 package com.vseonlineshop.payment.entity;
 
-import com.vseonlineshop.payment.enums.PaymentProvider;
+import com.vseonlineshop.payment.dto.PaymentMethod;
 import com.vseonlineshop.payment.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,7 +24,7 @@ public class Payment {
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private UUID userId;
 
     @Column(nullable = false, precision = 19, scale = 4)
@@ -34,8 +34,8 @@ public class Payment {
     private String currency;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "payment_provider", nullable = false)
-    private PaymentProvider paymentProvider;
+    @Column(name = "payment_method", nullable = false)
+    private PaymentMethod paymentMethod;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

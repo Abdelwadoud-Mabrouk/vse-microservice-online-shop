@@ -1,6 +1,5 @@
 package com.vseonlineshop.payment.webhook;
 
-import com.vseonlineshop.payment.webhook.papal.PaypalWebhookPayload;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +20,7 @@ public class WebhookVerifier {
                                  String transmissionSig,
                                  String certUrl,
                                  String authAlgo,
-                                 PaypalWebhookPayload payload) {
+                                 Object payload) {
         // TODO Production:
         // APIContext apiContext = new APIContext(clientId, clientSecret, "live");
         // WebhookEvent.validateReceivedEvent(apiContext, headers, body, webhookId);

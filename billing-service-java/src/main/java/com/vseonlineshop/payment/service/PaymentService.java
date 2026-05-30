@@ -2,7 +2,7 @@ package com.vseonlineshop.payment.service;
 
 import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentResponse;
-import com.vseonlineshop.payment.dto.ProviderResponse;
+import com.vseonlineshop.payment.dto.SmallProviderResponse;
 import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentTransaction;
 import com.vseonlineshop.payment.enums.PaymentStatus;
@@ -10,7 +10,6 @@ import com.vseonlineshop.payment.exception.PaymentSessionException;
 import com.vseonlineshop.payment.facade.PaymentPluginFacade;
 import com.vseonlineshop.payment.repository.PaymentRepository;
 import com.vseonlineshop.payment.repository.PaymentTransactionRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -22,13 +21,20 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PaymentService {
 
     private final PaymentRepository paymentRepo;
     private final PaymentTransactionRepository transactionRepo;
-    private final PaymentPluginFacade facade;
     private final KafkaEventPublisher kafkaEventPublisher;
+    private final PaymentPluginFacade paymentFacade;
+
+
+    public PaymentService(PaymentRepository paymentRepo, PaymentTransactionRepository transactionRepo, KafkaEventPublisher kafkaEventPublisher, PaymentPluginFacade paymentFacade) {
+        this.paymentRepo = paymentRepo;
+        this.transactionRepo = transactionRepo;
+        this.kafkaEventPublisher = kafkaEventPublisher;
+        this.paymentFacade = paymentFacade;
+    }
 
 
     @Transactional
@@ -66,8 +72,9 @@ public class PaymentService {
             boolean isNewPayment
     ) {
         try {
-            ProviderResponse providerResponse = facade.execute(request);
+            SmallProviderResponse providerResponse = paymentFacade.execute(request,payment.getPaymentId());
 
+            // Speichern in deiner DB (mit den Daten aus dem ProviderResponse)
             saveTransaction(
                     payment,
                     providerResponse.providerTransactionId(),
@@ -77,6 +84,7 @@ public class PaymentService {
                     0
             );
 
+            // Rückgabe an den Controller mit dem Builder
             return PaymentResponse.builder()
                     .paymentId(payment.getPaymentId())
                     .orderId(payment.getOrderId())
@@ -157,7 +165,7 @@ public class PaymentService {
                 .userId(request.userId())
                 .amount(request.totalAmount())
                 .currency(request.currency())
-                .paymentProvider(request.paymentProvider())
+                .paymentMethod(request.paymentMethod())
                 .status(PaymentStatus.PENDING)
                 .build();
 
