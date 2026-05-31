@@ -1,6 +1,6 @@
 package com.vseonlineshop.shopservice.dto.shop;
 
-import com.vseonlineshop.shopservice.domain.PaymentProvider;
+import com.vseonlineshop.shopservice.dto.payment.PaymentMethod;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -19,6 +19,6 @@ public record OrderRequest(
         @NotBlank(message = "Die Währung (currency) ist ein Pflichtfeld.")
         String currency,
 
-        @NotNull(message = "Der Zahlungsanbieter (paymentProvider) ist ein Pflichtfeld.")
-        PaymentProvider paymentProvider
+        @NotNull(message = "Der Zahlungsanbieter (paymentMethod) ist ein Pflichtfeld.")
+        PaymentMethod paymentMethod
 ) {}

@@ -1,34 +1,28 @@
 package com.vseonlineshop.payment.facade;
 
 import com.vseonlineshop.payment.dto.PaymentRequest;
-import com.vseonlineshop.payment.dto.ProviderResponse;
-import com.vseonlineshop.payment.enums.PaymentProvider;
+import com.vseonlineshop.payment.dto.SmallProviderResponse;
 import com.vseonlineshop.payment.strategy.PaymentStrategy;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import java.util.List;
-import java.util.stream.Stream;
+import org.springframework.stereotype.Component;
 
-@Service
-@RequiredArgsConstructor
+import java.util.List;
+import java.util.UUID;
+
+@Component
 public class PaymentPluginFacade {
 
-    // Spring injiziert automatisch ALLE PaymentStrategy-Implementierungen
-    private final List<PaymentStrategy> strategies;
+    private final List<PaymentStrategy> providers;
 
-    public ProviderResponse execute(PaymentRequest request) {
-        return strategies.stream()
-            .filter(s -> s.supports(request.paymentProvider()))
-            .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Provider nicht unterstützt: " + request.paymentProvider()))
-            .processPayment(request);
+    public PaymentPluginFacade(List<PaymentStrategy> providers) {
+        this.providers = providers;
     }
 
-    // Nützlich für Health-Check: welche Provider sind aktiv?
-    public List<PaymentProvider> supportedProviders() {
-        return Stream.of(PaymentProvider.values())
-            .filter(p -> strategies.stream().anyMatch(s -> s.supports(p)))
-            .toList();
+    public SmallProviderResponse execute(PaymentRequest request, UUID paymentId) {
+        return providers.stream()
+                .filter(p -> p.supports(request.paymentMethod()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Zahlungsmethode nicht unterstützt: " + request.paymentMethod()))
+                .send(request,paymentId);
     }
 }

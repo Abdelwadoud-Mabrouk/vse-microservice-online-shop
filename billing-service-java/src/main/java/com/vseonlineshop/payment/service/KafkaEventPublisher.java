@@ -63,7 +63,7 @@ public class KafkaEventPublisher {
                 payment.getPaymentId(),
                 payment.getOrderId(),
                 payment.getCorrelationId(),
-                payment.getPaymentProvider(),
+                payment.getPaymentMethod(),
                 payment.getStatus()
         );
         send(payment, paymentTopic, "WEBHOOK_DUPLICATE_IGNORED", payload);
@@ -75,7 +75,7 @@ public class KafkaEventPublisher {
                 payment.getPaymentId(),
                 payment.getOrderId(),
                 payment.getCorrelationId(),
-                payment.getPaymentProvider(),
+                payment.getPaymentMethod(),
                 eventType,
                 txn.getProviderTransactionId(),
                 txn.getRawResponse()
@@ -91,7 +91,7 @@ public class KafkaEventPublisher {
                 payment.getOrderId(),
                 payment.getCorrelationId(),
                 payment.getUserId(),
-                payment.getPaymentProvider(),
+                payment.getPaymentMethod(),
                 payment.getCurrency(),
                 payment.getStatus()
         );
@@ -106,7 +106,7 @@ public class KafkaEventPublisher {
                 payment.getOrderId(),
                 payment.getCorrelationId(),
                 payment.getUserId(),
-                payment.getPaymentProvider(),
+                payment.getPaymentMethod(),
                 payment.getAmount(),
                 payment.getCurrency(),
                 txn.getProviderTransactionId(),
@@ -122,7 +122,7 @@ public class KafkaEventPublisher {
                 payment.getOrderId(),
                 payment.getCorrelationId(),
                 payment.getUserId(),
-                payment.getPaymentProvider(),
+                payment.getPaymentMethod(),
                 payment.getAmount(),
                 payment.getCurrency(),
                 txn.getFailureReason(),

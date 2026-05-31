@@ -20,6 +20,7 @@ public class PaymentController {
      * Nimmt Payment-Request entgegen, legt Payment als PENDING an,
      * startet Async-Verarbeitung → gibt sofort 202 zurück.
      */
+
     @PostMapping
     public ResponseEntity<PaymentResponse> createPayment(
             @Valid @RequestBody PaymentRequest request) {
