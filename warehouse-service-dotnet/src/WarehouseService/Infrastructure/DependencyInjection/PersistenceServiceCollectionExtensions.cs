@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WarehouseService.Application;
 using WarehouseService.Infrastructure;
+using WarehouseService.Infrastructure.Kafka;
 using WarehouseService.Infrastructure.Persistence;
 using WarehouseService.Infrastructure.Persistence.Repositories;
 
@@ -16,7 +17,12 @@ public static class PersistenceServiceCollectionExtensions
 
         services.AddDbContext<WarehouseDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWarehouseRepository, EfWarehouseRepository>();
-        services.AddHttpClient<IAuditSink, HttpAuditSink>();
+        services.AddSingleton(new AuditKafkaOptions
+        {
+            BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
+            Topic = configuration["KAFKA_AUDIT_EVENTS_TOPIC"] ?? "audit-events"
+        });
+        services.AddSingleton<IAuditSink, KafkaAuditSink>();
 
         return services;
     }

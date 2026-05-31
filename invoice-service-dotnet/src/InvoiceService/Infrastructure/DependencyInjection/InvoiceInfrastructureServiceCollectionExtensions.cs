@@ -9,7 +9,16 @@ public static class InvoiceInfrastructureServiceCollectionExtensions
     {
         services.AddSingleton<IInvoiceRepository, FileInvoiceRepository>();
         services.AddSingleton<IInvoiceDocumentWriter, PdfInvoiceDocumentWriter>();
-        services.AddHttpClient<IAuditSink, HttpAuditSink>();
+        services.AddSingleton(provider =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            return new AuditKafkaOptions
+            {
+                BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
+                Topic = configuration["KAFKA_AUDIT_EVENTS_TOPIC"] ?? "audit-events"
+            };
+        });
+        services.AddSingleton<IAuditSink, KafkaAuditSink>();
         services.AddSingleton(provider =>
         {
             var configuration = provider.GetRequiredService<IConfiguration>();

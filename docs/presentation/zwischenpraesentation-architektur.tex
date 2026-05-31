@@ -118,28 +118,28 @@
 
 \begin{frame}{Ziel der Präsentation}
     \begin{itemize}
-        \item Microservices sind durch die Aufgabe vorgegeben.
-        \item Wir erklären unsere Architekturentscheidungen innerhalb dieser Vorgabe.
-        \item Wichtig ist: Warum diese Technologien und Kommunikationswege?
+        \item Wir zeigen das Architektur-Zielbild unseres Online-Shops.
+        \item Es geht um Aufbau, Kommunikation und technische Entscheidungen.
+        \item Wichtig ist: Welche Services gibt es und warum sind sie so getrennt?
     \end{itemize}
 
     \vspace{.5cm}
     \begin{block}{Leitfrage}
-        Wie bauen wir den Online-Shop so, dass er verständlich, testbar und erweiterbar bleibt?
+        Wie ist das System aufgebaut, damit es verständlich, wartbar und erweiterbar bleibt?
     \end{block}
 \end{frame}
 
 \begin{frame}{Architekturentscheidungen}
-    \begin{tabular}{>{\bfseries}p{4.2cm}p{7.7cm}}
+    \begin{tabular}{>{\bfseries}p{4.2cm}p{10cm}}
         \toprule
         Entscheidung & Begründung \\
         \midrule
         Java für Shop/Billing & passt gut für Web-APIs und bestehende Team-Aufteilung \\
-        .NET 10 für unsere Services & moderne Plattform, gute API-Unterstützung, klare Struktur \\
+        .NET 10 für unsere Services & moderne Plattform und klare Struktur für APIs \\
         Clean Architecture & Businesslogik bleibt unabhängig von Frameworks \\
-        REST & direkte Antwort bei Lager und Zahlung \\
-        Kafka & entkoppelte Events, z. B. Rechnung nach Zahlung \\
-        PostgreSQL & zuverlässige Speicherung für Audit-Daten \\
+        REST & direkte Antwort, wenn ein Schritt sofort entschieden werden muss \\
+        Kafka & entkoppelte Events für Rechnung und Audit \\
+        PostgreSQL & zuverlässige Speicherung strukturierter Daten \\
         \bottomrule
     \end{tabular}
 \end{frame}
@@ -148,32 +148,61 @@
 
 \begin{frame}{Systemkontext}
     \centering
-    \resizebox{!}{.72\textheight}{
-    \begin{tikzpicture}[node distance=1.25cm and 1.35cm]
-        \node[service=WarnRed] (user) {User};
+    \resizebox{!}{.64\textheight}{
+    \begin{tikzpicture}[
+        x=1cm,
+        y=1cm,
+        rest/.style={-{Latex[length=2.4mm]}, very thick, draw=hsBlue},
+        kafkaevent/.style={-{Latex[length=2.4mm]}, very thick, dashed, draw=JavaOrange},
+        dataflow/.style={-{Latex[length=2.0mm]}, thick, dotted, draw=InfraGray},
+        storeBase/.style={
+            rectangle,
+            rounded corners=1.5mm,
+            thick,
+            align=center,
+            minimum width=2.7cm,
+            minimum height=.75cm,
+            font=\scriptsize
+        },
+        storeWarehouse/.style={storeBase, draw=DotnetBlue, fill=DotnetBlue!8},
+        storeShop/.style={storeBase, draw=ShopBlue, fill=ShopBlue!8},
+        storeBilling/.style={storeBase, draw=JavaOrange, fill=JavaOrange!8},
+        storeAudit/.style={storeBase, draw=AuditGreen, fill=AuditGreen!8},
+        storeInvoice/.style={storeBase, draw=DotnetBlue, fill=DotnetBlue!8}
+    ]
+        \node[service=WarnRed, minimum width=2.8cm] (user) at (0,5.0) {User / Frontend};
+        \node[service=ShopBlue, minimum width=3.3cm] (shop) at (0,3.85) {Shop-Service\\Java};
 
-        \node[service=ShopBlue, below=1.0cm of user] (shop) {Shop-Service\\Java};
-        \node[service=JavaOrange, right=1.35cm of shop] (billing) {Billing-Service\\Java};
-        \node[service=DotnetBlue, left=1.35cm of shop] (warehouse) {Warehouse-Service\\.NET};
-        \node[service=DotnetBlue, below=1.25cm of billing] (invoice) {Invoice-Service\\.NET};
-        \node[service=AuditGreen, below=1.25cm of shop] (audit) {Audit-Service\\.NET};
+        \node[service=DotnetBlue, minimum width=3.0cm] (warehouse) at (-4.6,2.55) {Warehouse-Service\\.NET};
+        \node[service=JavaOrange, minimum width=3.0cm] (billing) at (0,2.55) {Billing-Service\\Java};
+        \node[service=WarnRed, minimum width=3.0cm] (payment) at (4.6,2.55) {Payment-Provider\\Stub};
 
-        \node[service=InfraGray, below=1.15cm of warehouse] (kafka) {Kafka};
-        \node[db=InfraGray, below=1.15cm of audit] (postgres) {PostgreSQL};
-        \node[service=WarnRed, right=1.35cm of billing] (payment) {Payment-Provider\\Stub};
+        \node[service=InfraGray, minimum width=4.1cm] (kafka) at (0,1.25) {Kafka\\Event-Bus};
+        \node[service=AuditGreen, minimum width=3.0cm] (audit) at (-3.2,.05) {Audit-Service\\.NET};
+        \node[service=DotnetBlue, minimum width=3.0cm] (invoice) at (3.2,.05) {Invoice-Service\\.NET};
 
-        \draw[arrow] (user) -- node[note, right] {REST} (shop);
-        \draw[arrow] (shop) -- node[note, above] {REST} (warehouse);
-        \draw[arrow] (shop) -- node[note, above] {REST} (billing);
-        \draw[arrow] (billing) -- node[note, above] {REST} (payment);
-        \draw[event] (billing) |- node[note, right] {Event} (kafka);
-        \draw[event] (kafka) -| node[note, above] {Event} (invoice);
+        \node[font=\scriptsize, text=hsGray] at (0,-.95) {Eigene Datenhaltung je Service};
+        \node[storeWarehouse] (warehousedb) at (-5.8,-1.65) {Warehouse-DB\\Bestand};
+        \node[storeShop] (shopdb) at (-2.45,-1.65) {Shop-DB\\Bestellungen, Preise};
+        \node[storeBilling] (billingdb) at (.9,-1.65) {Billing-DB\\Zahlungen};
+        \node[storeAudit] (auditdb) at (4.25,-1.65) {Audit-DB\\PostgreSQL};
+        \node[storeInvoice] (invoicedata) at (7.6,-1.65) {Invoice\\PDFs};
 
-        \draw[arrow] (shop) -- (audit);
-        \draw[arrow] (billing) -- (audit);
-        \draw[arrow] (warehouse) -- (audit);
-        \draw[arrow] (invoice) -- (audit);
-        \draw[arrow] (audit) -- node[note, right] {speichert} (postgres);
+        \draw[rest] (user) -- node[note, right] {REST} (shop);
+        \draw[rest] (shop) -- node[note, above, sloped] {Reservierung} (warehouse);
+        \draw[rest] (shop) -- node[note, right] {Zahlung} (billing);
+        \draw[rest] (billing) -- node[note, above] {Payment API} (payment);
+
+        \draw[kafkaevent] (billing) -- node[note, right] {\texttt{PaymentSucceeded}} (kafka);
+        \draw[kafkaevent] (kafka) -- node[note, above, sloped] {AuditEvents} (audit);
+        \draw[kafkaevent] (kafka) -- node[note, above, sloped] {PaymentSucceeded} (invoice);
+
+        \node[note, text width=4.2cm] at (-4.75,1.25) {Alle Services schreiben wichtige Ereignisse als AuditEvents nach Kafka.};
+
+        \draw[rest] (-5.8,-2.45) -- (-5.25,-2.45);
+        \node[anchor=west, font=\scriptsize] at (-5.15,-2.45) {REST};
+        \draw[kafkaevent] (-3.85,-2.45) -- (-3.3,-2.45);
+        \node[anchor=west, font=\scriptsize] at (-3.2,-2.45) {Kafka/Event};
     \end{tikzpicture}}
 \end{frame}
 
@@ -185,41 +214,27 @@
         \midrule
         Shop & Java & Nimmt Bestellungen an und steuert den Ablauf \\
         Billing & Java & Führt Zahlungen aus \\
-        Warehouse & .NET & Reserviert und bucht Lagerbestand \\
-        Invoice & .NET & Erstellt Rechnungen nach erfolgreicher Zahlung \\
-        Audit & .NET + PostgreSQL & Speichert wichtige Ereignisse dauerhaft \\
-        Kafka & Infrastruktur & Verteilt Events zwischen Services \\
+        Warehouse & .NET & Verwaltet Bestand, Reservierung, Commit und Cancel \\
+        Invoice & .NET & Erstellt und speichert Rechnungen als PDF \\
+        Audit & .NET + PostgreSQL & Konsumiert Audit-Events und speichert die Timeline \\
+        Kafka & Infrastruktur & Verteilt Events zwischen Services und Audit \\
         \bottomrule
     \end{tabular}
 \end{frame}
 
 \section{Technologie}
 
-\begin{frame}{Warum .NET 10 für unsere Services?}
-    \begin{itemize}
-        \item Wir setzen Warehouse, Invoice und Audit mit .NET 10 um.
-        \item .NET passt gut für schlanke REST-APIs.
-        \item Swagger, Dependency Injection und Tests sind direkt gut unterstützt.
-        \item Die Sprache C\# erlaubt klaren, gut lesbaren Code.
-    \end{itemize}
-
-    \vspace{.5cm}
-    \begin{block}{Entscheidung}
-        .NET 10 ist für unseren Teil pragmatisch: modern, stabil und gut testbar.
-    \end{block}
-\end{frame}
-
 \begin{frame}{Warum Clean Architecture?}
     \begin{itemize}
-        \item Controller enthalten keine Businesslogik.
+        \item Die API-Schicht nimmt nur Anfragen an.
         \item Use Cases beschreiben die fachlichen Abläufe.
-        \item Domain enthält die Regeln.
-        \item Infrastructure enthält Technik wie Datenbank, HTTP und Dateien.
+        \item Domain enthält Modelle und Regeln.
+        \item Infrastructure enthält Datenbank, Kafka, HTTP und Dateien.
     \end{itemize}
 
     \vspace{.5cm}
     \begin{block}{Vorteil}
-        Wir können fachliche Logik testen, ohne echte Datenbank oder echte HTTP-Aufrufe zu brauchen.
+        Die Businesslogik bleibt unabhängig von Frameworks, Datenbank und UI.
     \end{block}
 \end{frame}
 
@@ -232,7 +247,7 @@
                 \begin{itemize}
                     \item direkte Anfrage
                     \item direkte Antwort
-                    \item gut für Lager und Zahlung
+                    \item gut für Lager-Reservierung
                 \end{itemize}
             \end{block}
         \end{column}
@@ -241,7 +256,7 @@
                 \begin{itemize}
                     \item asynchrone Events
                     \item Services sind weniger gekoppelt
-                    \item gut für Rechnung
+                    \item gut für Rechnung und Audit
                 \end{itemize}
             \end{block}
         \end{column}
@@ -249,65 +264,53 @@
 
     \vspace{.5cm}
     \begin{alertblock}{Warum beides?}
-        REST ist gut, wenn der Shop sofort eine Antwort braucht.
-        Kafka ist gut, wenn ein Schritt später im Hintergrund passieren kann.
+        REST nutzen wir, wenn der Shop sofort wissen muss, ob etwas geklappt hat.
+        Kafka nutzen wir, wenn ein Ereignis im Hintergrund weiterverarbeitet wird.
     \end{alertblock}
-\end{frame}
-
-\begin{frame}{Warum Kafka?}
-    \begin{itemize}
-        \item Kafka ist sinnvoll für Ereignisse, die nicht sofort beantwortet werden müssen.
-        \item Beispiel: Nach erfolgreicher Zahlung entsteht eine Rechnung.
-        \item Invoice-Service kann unabhängig vom Shop arbeiten.
-        \item Später können weitere Services dasselbe Event nutzen.
-    \end{itemize}
-
-    \vspace{.5cm}
-    \begin{block}{Beispiel}
-        Billing sendet \texttt{PaymentSucceeded}. Invoice hört darauf und erstellt die Rechnung.
-    \end{block}
 \end{frame}
 
 \section{Datenhaltung}
 
-\begin{frame}{Warum PostgreSQL für Audit?}
+\begin{frame}{Datenhaltung}
     \begin{itemize}
-        \item Audit-Daten müssen zuverlässig gespeichert werden.
-        \item PostgreSQL ist stabil und gut geeignet für strukturierte Daten.
-        \item Die Timeline einer Bestellung kann einfach abgefragt werden.
-        \item Append-only Speicherung passt gut zum Audit-Prinzip.
+        \item Jeder Service besitzt seine eigenen Daten.
+        \item Shop speichert Bestellungen und Preise.
+        \item Warehouse speichert Bestand und Reservierungen.
+        \item Invoice speichert Rechnungsdaten und PDF-Dateien.
+        \item Audit speichert alle Events append-only in PostgreSQL.
     \end{itemize}
 
     \vspace{.5cm}
-    \begin{block}{Entscheidung}
-        Für Audit ist Konsistenz wichtiger als maximale Geschwindigkeit.
-        Deshalb verwenden wir PostgreSQL.
+    \begin{block}{Wichtig}
+        Ein Service greift nicht direkt auf die Datenbank eines anderen Services zu.
     \end{block}
 \end{frame}
 
-\begin{frame}{Audit: Warum ist das wichtig?}
+\begin{frame}{Audit und Observability}
     \begin{block}{Ziel}
-        Wir können später genau sehen, was mit einer Bestellung passiert ist.
+        Wir können genau sehen, was mit einer Bestellung passiert ist.
     \end{block}
 
     \begin{itemize}
         \item Jede Bestellung bekommt eine \texttt{correlationId}.
-        \item Alle Services schreiben Events mit dieser ID.
-        \item Dadurch entsteht eine Timeline der Bestellung.
-        \item Audit-Einträge werden nicht verändert.
+        \item Audit zeigt die fachliche Timeline.
+        \item Grafana zeigt technische Logs für Debugging.
+        \item Beide helfen, Fehler schneller zu finden.
     \end{itemize}
 \end{frame}
 
-\section{Tests}
+\section{Abläufe}
 
-\begin{frame}{Best Case und Worst Case}
+\begin{frame}{Geplanter Best Case und Worst Case}
     \begin{columns}[T]
         \begin{column}{.48\textwidth}
             \begin{block}{Best Case}
                 \begin{itemize}
+                    \item Bestellung wird angelegt
                     \item Lager reserviert
-                    \item Zahlung erfolgreich
+                    \item Zahlung wird simuliert
                     \item Rechnung erstellt
+                    \item Lager wird committed
                     \item Bestellung abgeschlossen
                 \end{itemize}
             \end{block}
@@ -315,10 +318,11 @@
         \begin{column}{.48\textwidth}
             \begin{alertblock}{Worst Case}
                 \begin{itemize}
-                    \item Zahlung erfolgreich
-                    \item Warehouse-Commit schlägt fehl
-                    \item Refund wird ausgelöst
-                    \item Audit zeigt Fehler und Ausgleich
+                    \item Bestellung wird angelegt
+                    \item Bestand reicht nicht aus
+                    \item Warehouse liefert \texttt{409 Conflict}
+                    \item Keine Rechnung wird erstellt
+                    \item Audit zeigt den Fehler
                 \end{itemize}
             \end{alertblock}
         \end{column}
@@ -326,60 +330,19 @@
 
     \vspace{.45cm}
     \begin{block}{Warum wichtig?}
-        Die Architektur muss nicht nur im Erfolgsfall funktionieren, sondern auch bei Fehlern nachvollziehbar bleiben.
-    \end{block}
-\end{frame}
-
-\section{Stand}
-
-\begin{frame}{Aktueller Stand}
-    \begin{columns}[T]
-        \begin{column}{.48\textwidth}
-            \begin{block}{Fertig}
-                \begin{itemize}
-                    \item .NET-Services angelegt
-                    \item Swagger UI
-                    \item Docker Compose
-                    \item Audit mit PostgreSQL
-                    \item Unit-Tests grün
-                \end{itemize}
-            \end{block}
-        \end{column}
-        \begin{column}{.48\textwidth}
-            \begin{alertblock}{Offen}
-                \begin{itemize}
-                    \item Kafka im Code anbinden
-                    \item Logging verbessern
-                    \item Integrationstests
-                    \item Abstimmung mit Java-Services
-                \end{itemize}
-            \end{alertblock}
-        \end{column}
-    \end{columns}
-\end{frame}
-
-\begin{frame}{Nächste Schritte}
-    \begin{enumerate}
-        \item Java- und .NET-Services verbinden.
-        \item Kafka-Event \texttt{PaymentSucceeded} umsetzen.
-        \item Logging mit \texttt{correlationId} ergänzen.
-        \item Happy Path und Fehlerfälle testen.
-        \item Bericht und Demo vorbereiten.
-    \end{enumerate}
-
-    \vspace{.5cm}
-    \begin{block}{Priorität}
-        Zuerst die Integration stabil machen. Danach Tests und Dokumentation verbessern.
+        Die Architektur muss nicht nur im Erfolgsfall funktionieren.
+        Sie muss auch erklären können, warum ein Prozess gestoppt wurde.
     \end{block}
 \end{frame}
 
 \begin{frame}{Zusammenfassung}
     \begin{itemize}
         \item Microservices sind die Vorgabe der Aufgabe.
-        \item Unsere Entscheidungen sind: .NET 10, Clean Architecture, REST, Kafka und PostgreSQL.
+        \item Unsere Entscheidungen sind: Java Spring Boot, .NET 10, Clean Architecture, REST, Kafka und PostgreSQL.
         \item REST nutzen wir für direkte Entscheidungen.
-        \item Kafka nutzen wir für entkoppelte Hintergrundprozesse.
-        \item PostgreSQL nutzen wir für nachvollziehbare Audit-Daten.
+        \item Kafka nutzen wir für entkoppelte Events und Audit.
+        \item PostgreSQL nutzen wir für strukturierte, nachvollziehbare Daten.
+        \item Die \texttt{correlationId} verbindet die Schritte einer Bestellung.
     \end{itemize}
 
     \vspace{.7cm}

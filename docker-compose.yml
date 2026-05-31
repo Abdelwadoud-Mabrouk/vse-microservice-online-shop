@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # =========================
   # PostgreSQL - Audit Service
@@ -149,12 +147,16 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       AUDIT_SERVICE_URL: http://audit-service:8080
       WAREHOUSE_DB_CONNECTION: Host=warehouse-db;Port=5432;Database=${WAREHOUSE_DB_NAME:?Set WAREHOUSE_DB_NAME in .env};Username=${WAREHOUSE_DB_USER:?Set WAREHOUSE_DB_USER in .env};Password=${WAREHOUSE_DB_PASSWORD:?Set WAREHOUSE_DB_PASSWORD in .env}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      KAFKA_AUDIT_EVENTS_TOPIC: ${KAFKA_AUDIT_EVENTS_TOPIC:-audit-events}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       audit-service:
         condition: service_started
       warehouse-db:
         condition: service_healthy
+      kafka:
+        condition: service_started
       otel-collector:
         condition: service_started
     ports:
@@ -174,6 +176,7 @@ services:
       INVOICE_DATA_DIR: /app/data/invoices
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       KAFKA_PAYMENT_SUCCEEDED_TOPIC: ${KAFKA_PAYMENT_SUCCEEDED_TOPIC:-payment-succeeded}
+      KAFKA_AUDIT_EVENTS_TOPIC: ${KAFKA_AUDIT_EVENTS_TOPIC:-audit-events}
       KAFKA_INVOICE_CONSUMER_GROUP: ${KAFKA_INVOICE_CONSUMER_GROUP:-invoice-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
