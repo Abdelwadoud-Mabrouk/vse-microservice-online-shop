@@ -83,7 +83,7 @@ audit-events
 Konfiguration:
 
 ```env
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_BOOTSTRAP_SERVERS=kafka:29092
 KAFKA_PAYMENT_SUCCEEDED_TOPIC=payment-succeeded
 KAFKA_AUDIT_EVENTS_TOPIC=audit-events
 KAFKA_INVOICE_CONSUMER_GROUP=invoice-service

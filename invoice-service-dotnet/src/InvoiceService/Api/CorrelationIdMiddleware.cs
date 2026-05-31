@@ -20,11 +20,17 @@ public static class HttpContextExtensions
 {
     public static Guid GetCorrelationId(this HttpContext context, Guid fallback)
     {
+        if (fallback != Guid.Empty)
+        {
+            context.Response.Headers["X-Correlation-Id"] = fallback.ToString();
+            return fallback;
+        }
+
         if (context.Items.TryGetValue("CorrelationId", out var value) && value is Guid correlationId)
         {
             return correlationId;
         }
 
-        return fallback == Guid.Empty ? Guid.NewGuid() : fallback;
+        return Guid.NewGuid();
     }
 }

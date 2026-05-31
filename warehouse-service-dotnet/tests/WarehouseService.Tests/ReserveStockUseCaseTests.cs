@@ -50,6 +50,63 @@ public sealed class ReserveStockUseCaseTests
         Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_OUT_OF_STOCK" && item.StatusCode == "FAILURE");
     }
 
+    [Fact]
+    public async Task CommitAsync_WhenReservationExists_WritesCommittedAuditEvent()
+    {
+        var audit = new RecordingAuditSink();
+        var reservation = NewReservation().Commit();
+        var repository = new StubWarehouseRepository(
+            new ReservationResult(true, "created", null),
+            committedReservation: reservation);
+
+        var useCase = new CommitReservationUseCase(repository, audit);
+
+        var result = await useCase.ExecuteAsync(reservation.ReservationId, reservation.CorrelationId, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(ReservationStatus.Committed, result.Status);
+        Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_COMMITTED" && item.StatusCode == "SUCCESS");
+    }
+
+    [Fact]
+    public async Task CommitAsync_WhenReservationIsMissing_DoesNotWriteSuccessAuditEvent()
+    {
+        var audit = new RecordingAuditSink();
+        var repository = new StubWarehouseRepository(new ReservationResult(false, "missing", null));
+        var useCase = new CommitReservationUseCase(repository, audit);
+
+        var result = await useCase.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.DoesNotContain(audit.Events, item => item.EventType == "WAREHOUSE_COMMITTED");
+    }
+
+    [Fact]
+    public async Task CancelAsync_WhenReservationExists_WritesCompensationAuditEvent()
+    {
+        var audit = new RecordingAuditSink();
+        var reservation = NewReservation().Cancel();
+        var repository = new StubWarehouseRepository(
+            new ReservationResult(true, "created", null),
+            cancelledReservation: reservation);
+
+        var useCase = new CancelReservationUseCase(repository, audit);
+
+        var result = await useCase.ExecuteAsync(reservation.ReservationId, reservation.CorrelationId, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(ReservationStatus.Cancelled, result.Status);
+        Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_RESERVATION_CANCELLED" && item.StatusCode == "COMPENSATED");
+    }
+
+    private static Reservation NewReservation()
+    {
+        return Reservation.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            [ReservationItem.Create(DeskId, "SKU-DESK", 1)]);
+    }
+
     private sealed class RecordingAuditSink : IAuditSink
     {
         public List<(Guid CorrelationId, string EventType, string StatusCode)> Events { get; } = [];
@@ -61,7 +118,10 @@ public sealed class ReserveStockUseCaseTests
         }
     }
 
-    private sealed class StubWarehouseRepository(ReservationResult result) : IWarehouseRepository
+    private sealed class StubWarehouseRepository(
+        ReservationResult result,
+        Reservation? cancelledReservation = null,
+        Reservation? committedReservation = null) : IWarehouseRepository
     {
         public IReadOnlyList<InventoryItemDto> GetInventory() => [];
 
@@ -81,8 +141,8 @@ public sealed class ReserveStockUseCaseTests
 
         public ReservationResult TryReserve(ReserveStockCommand command) => result;
 
-        public Reservation? Cancel(Guid reservationId) => null;
+        public Reservation? Cancel(Guid reservationId) => cancelledReservation;
 
-        public Reservation? Commit(Guid reservationId) => null;
+        public Reservation? Commit(Guid reservationId) => committedReservation;
     }
 }

@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WarehouseService.Tests", "w
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InvoiceService.Tests", "invoice-service-dotnet\tests\InvoiceService.Tests\InvoiceService.Tests.csproj", "{8F4553A1-886A-4127-9588-E68D293B22B1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineShop.DotNetServices.E2E.Tests", "dotnet-e2e-tests\OnlineShop.DotNetServices.E2E.Tests.csproj", "{B7F70DAA-0E8C-46C1-9E6E-667FE3AEAE28}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,5 +46,9 @@ Global
 		{8F4553A1-886A-4127-9588-E68D293B22B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F4553A1-886A-4127-9588-E68D293B22B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F4553A1-886A-4127-9588-E68D293B22B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B7F70DAA-0E8C-46C1-9E6E-667FE3AEAE28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7F70DAA-0E8C-46C1-9E6E-667FE3AEAE28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7F70DAA-0E8C-46C1-9E6E-667FE3AEAE28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7F70DAA-0E8C-46C1-9E6E-667FE3AEAE28}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

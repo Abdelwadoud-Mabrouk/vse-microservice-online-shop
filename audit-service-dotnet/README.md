@@ -107,7 +107,7 @@ Infrastructure/Persistence/Migrations/
 ## Kafka-Konfiguration
 
 ```env
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_BOOTSTRAP_SERVERS=kafka:29092
 KAFKA_AUDIT_EVENTS_TOPIC=audit-events
 KAFKA_AUDIT_CONSUMER_GROUP=audit-service
 ```

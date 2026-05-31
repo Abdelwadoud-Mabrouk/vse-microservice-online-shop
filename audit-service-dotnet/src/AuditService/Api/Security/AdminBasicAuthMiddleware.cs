@@ -3,7 +3,10 @@ using System.Text;
 
 namespace AuditService.Api.Security;
 
-public sealed class AdminBasicAuthMiddleware(RequestDelegate next, IConfiguration configuration)
+public sealed class AdminBasicAuthMiddleware(
+    RequestDelegate next,
+    IConfiguration configuration,
+    ILogger<AdminBasicAuthMiddleware> logger)
 {
     private const string Realm = "Audit Admin";
 
@@ -39,8 +42,15 @@ public sealed class AdminBasicAuthMiddleware(RequestDelegate next, IConfiguratio
             return false;
         }
 
-        var expectedUser = configuration["ADMIN_USERNAME"] ?? "admin";
-        var expectedPassword = configuration["ADMIN_PASSWORD"] ?? "admin";
+        var expectedUser = configuration["ADMIN_USERNAME"];
+        var expectedPassword = configuration["ADMIN_PASSWORD"];
+
+        if (string.IsNullOrWhiteSpace(expectedUser) || string.IsNullOrWhiteSpace(expectedPassword))
+        {
+            logger.LogWarning(
+                "Admin authentication is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD before using the admin area.");
+            return false;
+        }
 
         try
         {

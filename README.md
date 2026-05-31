@@ -135,6 +135,10 @@ Swagger ist im Development-Modus aktiv:
 - `http://localhost:5082/swagger`
 - `http://localhost:5083/swagger`
 
+Ein einfacher Ablauf zum selbst Testen:
+
+- [Best Case und Worst Case testen](docs/best-worst-case-testablauf.md)
+
 ## Tests starten
 
 Mit installiertem .NET 10 SDK:
