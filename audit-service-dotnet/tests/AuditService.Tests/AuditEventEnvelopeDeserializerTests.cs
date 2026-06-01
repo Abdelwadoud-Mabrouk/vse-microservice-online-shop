@@ -53,6 +53,30 @@ public sealed class AuditEventEnvelopeDeserializerTests
     }
 
     [Fact]
+    public void Deserialize_AcceptsJavaDomainEventEnvelope()
+    {
+        var message = """
+        {
+          "eventId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "correlationId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          "eventType": "ORDER_CREATED",
+          "source": "shop-service",
+          "occurredAt": "2026-05-30T18:58:26.223",
+          "payload": {
+            "orderId": "order-123"
+          }
+        }
+        """;
+
+        var envelope = AuditEventEnvelopeDeserializer.Deserialize(message);
+
+        Assert.Equal("shop-service", envelope.Service);
+        Assert.Equal("shop-service", envelope.Actor);
+        Assert.Equal("SUCCESS", envelope.StatusCode);
+        Assert.True(envelope.Payload.ContainsKey("orderId"));
+    }
+
+    [Fact]
     public void Deserialize_RejectsMissingCorrelationId()
     {
         var message = """

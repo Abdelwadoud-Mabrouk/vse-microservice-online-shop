@@ -25,21 +25,41 @@ public static class AuditEventEnvelopeDeserializer
             throw new JsonException("eventType is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(envelope.Service))
+        var service = string.IsNullOrWhiteSpace(envelope.Service)
+            ? envelope.Source
+            : envelope.Service;
+
+        if (string.IsNullOrWhiteSpace(service))
         {
-            throw new JsonException("service is required.");
+            throw new JsonException("service or source is required.");
         }
+
+        var timestamp = ParseTimestamp(envelope.Timestamp)
+            ?? ParseTimestamp(envelope.OccurredAt)
+            ?? DateTimeOffset.UtcNow;
 
         return new AuditEventEnvelope(
             envelope.EventId == Guid.Empty ? Guid.NewGuid() : envelope.EventId,
             envelope.CorrelationId,
             envelope.EventType.Trim(),
-            envelope.Service.Trim(),
-            envelope.Timestamp ?? DateTimeOffset.UtcNow,
+            service.Trim(),
+            timestamp,
             envelope.Payload ?? new Dictionary<string, object?>(),
             envelope.PreviousEventId,
-            string.IsNullOrWhiteSpace(envelope.Actor) ? envelope.Service.Trim() : envelope.Actor.Trim(),
+            string.IsNullOrWhiteSpace(envelope.Actor) ? service.Trim() : envelope.Actor.Trim(),
             string.IsNullOrWhiteSpace(envelope.StatusCode) ? "SUCCESS" : envelope.StatusCode.Trim());
+    }
+
+    private static DateTimeOffset? ParseTimestamp(string? timestamp)
+    {
+        if (string.IsNullOrWhiteSpace(timestamp))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(timestamp, out var parsed)
+            ? parsed
+            : null;
     }
 
     private sealed record AuditEventEnvelopeDto(
@@ -47,7 +67,9 @@ public static class AuditEventEnvelopeDeserializer
         Guid CorrelationId,
         string? EventType,
         string? Service,
-        DateTimeOffset? Timestamp,
+        string? Source,
+        string? Timestamp,
+        string? OccurredAt,
         Dictionary<string, object?>? Payload,
         Guid? PreviousEventId,
         string? Actor,
