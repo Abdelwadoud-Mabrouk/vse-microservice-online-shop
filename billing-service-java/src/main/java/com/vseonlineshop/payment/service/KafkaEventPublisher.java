@@ -33,6 +33,8 @@ public class KafkaEventPublisher {
     @Value("${kafka.topics.alerts}")
     private String alertTopic;
 
+    @Value("${kafka.topics.audit-events}")
+    private String auditEvents;
 
     private static final UUID SYSTEM_FALLBACK_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
@@ -43,7 +45,7 @@ public class KafkaEventPublisher {
                 message,
                 providerTxnId
         );
-        sendAlert(alertTopic, "SYSTEM_ALERT", SYSTEM_FALLBACK_UUID, providerTxnId, payload);
+        sendAlert(auditEvents, "SYSTEM_ALERT", SYSTEM_FALLBACK_UUID, providerTxnId, payload);
     }
 
     // ── SECURITY_ALERT ────────────────────────────────────────────────────────
@@ -54,7 +56,7 @@ public class KafkaEventPublisher {
                 invalidPaymentIdRaw
         );
 
-        sendAlert(alertTopic, "SECURITY_ALERT", SYSTEM_FALLBACK_UUID, invalidPaymentIdRaw, payload);
+        sendAlert(auditEvents, "SECURITY_ALERT", SYSTEM_FALLBACK_UUID, invalidPaymentIdRaw, payload);
     }
 
     // ── WEBHOOK_DUPLICATE_IGNORED (Idempotenz-Hit) ─────────────────────────────
@@ -81,7 +83,7 @@ public class KafkaEventPublisher {
                 txn.getRawResponse()
         );
 
-        send(payment, paymentTopic, "PAYMENT_NOTIFICATION_RECEIVED", payload);
+        send(payment, auditEvents, "PAYMENT_NOTIFICATION_RECEIVED", payload);
     }
 
     public void publishPaymentCreated(Payment payment) {
@@ -95,7 +97,7 @@ public class KafkaEventPublisher {
                 payment.getCurrency(),
                 payment.getStatus()
         );
-        send(payment, paymentTopic, "PAYMENT_INITIALIZED", payload);
+        send(payment, auditEvents, "PAYMENT_INITIALIZED", payload);
     }
 
 
@@ -112,7 +114,7 @@ public class KafkaEventPublisher {
                 txn.getProviderTransactionId(),
                 txn.getRawResponse()
         );
-        send(payment, paymentTopic, "PAYMENT_SUCCEEDED", payload);
+        send(payment, auditEvents, "PAYMENT_SUCCEEDED", payload);
     }
 
     // ── PAYMENT_FAILED ─────────────────────────────────────
@@ -129,7 +131,7 @@ public class KafkaEventPublisher {
                 txn.getProviderTransactionId(),
                 txn.getRawResponse()
         );
-        send(payment, paymentTopic, "PAYMENT_FAILED", payload);
+        send(payment, auditEvents, "PAYMENT_FAILED", payload);
     }
 
     // ── Interner Send (fire & forget) ──────────────────────

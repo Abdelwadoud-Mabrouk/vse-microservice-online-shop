@@ -11,5 +11,9 @@ public record ItemRequest(
 
         @NotNull(message = "Die Menge darf nicht null sein.")
         @Min(value = 1, message = "Die Bestellmenge muss mindestens 1 betragen.")
-        Integer quantity
-) {}
+        Integer quantity,
+
+        @NotNull(message = "Die Sku darf nicht null sein.")
+        String sku
+) {
+}

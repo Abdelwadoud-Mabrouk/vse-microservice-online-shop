@@ -1,14 +1,18 @@
 package com.vseonlineshop.payment.event;
 
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import java.time.Instant;
 import java.util.UUID;
+
 
 public record DomainEvent<T>(
         UUID eventId,
         String eventType,
-        String source,
+        String service,
         UUID correlationId,
-        LocalDateTime occurredAt,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Instant timestamp,
         T payload
 ) {
     public static <T> DomainEvent<T> of(
@@ -21,7 +25,7 @@ public record DomainEvent<T>(
                 eventType,
                 source,
                 correlationId,
-                LocalDateTime.now(),
+                Instant.now(),
                 payload
         );
     }

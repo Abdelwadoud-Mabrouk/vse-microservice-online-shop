@@ -11,7 +11,7 @@ public record PaymentFailedPayload(
         UUID orderId,
         UUID correlationId,
         UUID userId,
-        PaymentMethod paymentProvider,
+        PaymentMethod paymentMethod,
         BigDecimal amount,
         String currency,
         String failureReason,

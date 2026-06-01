@@ -27,6 +27,9 @@ public class OrderItem {
     @Column(name = "product_name", nullable = false)
     private String productName;
 
+    @Column(name = "sku", nullable = false)
+    private String sku;
+
     @Column(nullable = false)
     private Integer quantity;
 
