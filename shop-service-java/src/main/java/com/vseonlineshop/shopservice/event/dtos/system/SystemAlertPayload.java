@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.event.dtos;
+package com.vseonlineshop.shopservice.event.dtos.system;
 
 import java.time.Instant;
 import java.util.Map;

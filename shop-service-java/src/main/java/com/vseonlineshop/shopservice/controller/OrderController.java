@@ -3,7 +3,7 @@ package com.vseonlineshop.shopservice.controller;
 
 import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
 import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
-import com.vseonlineshop.shopservice.service.OrderApplicationService;
+import com.vseonlineshop.shopservice.service.shop.OrderApplicationService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

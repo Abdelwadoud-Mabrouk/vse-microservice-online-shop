@@ -1,27 +1,30 @@
 package com.vseonlineshop.shopservice.event.dtos;
 
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import java.time.Instant;
 import java.util.UUID;
 
 public record DomainEvent<T>(
         UUID eventId,
         String eventType,
-        String source,
+        String service,
         UUID correlationId,
-        LocalDateTime occurredAt,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Instant timestamp,
         T payload
 ) {
     public static <T> DomainEvent<T> of(
             String eventType,
-            String source,
+            String service,
             UUID correlationId,
             T payload) {
         return new DomainEvent<>(
                 UUID.randomUUID(),
                 eventType,
-                source,
+                service,
                 correlationId,
-                LocalDateTime.now(),
+                Instant.now(),
                 payload
         );
     }

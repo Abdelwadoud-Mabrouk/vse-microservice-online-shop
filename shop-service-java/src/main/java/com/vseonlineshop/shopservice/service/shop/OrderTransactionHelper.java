@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.service;
+package com.vseonlineshop.shopservice.service.shop;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderItem;
@@ -68,6 +68,7 @@ public class OrderTransactionHelper {
             item.setOrder(order);
             item.setProductId(whItem.productId());
             item.setQuantity(whItem.quantity());
+            item.setSku(whItem.sku());
             Optional<Product> optionalProduct = productRepository.findById(whItem.productId());
             if (optionalProduct.isPresent()) {
                 Product product = optionalProduct.get();
