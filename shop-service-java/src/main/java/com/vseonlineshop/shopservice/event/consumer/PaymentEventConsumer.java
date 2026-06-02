@@ -4,18 +4,21 @@ package com.vseonlineshop.shopservice.event.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderStatus;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
 import com.vseonlineshop.shopservice.event.dtos.DomainEvent;
 import com.vseonlineshop.shopservice.event.dtos.payment.PaymentFailedPayload;
 import com.vseonlineshop.shopservice.event.dtos.payment.PaymentSucceededPayload;
 import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import com.vseonlineshop.shopservice.event.producer.KafkaEventPublisher;
+import com.vseonlineshop.shopservice.service.client.WarehouseClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Instant;
 import java.util.Map;
@@ -29,13 +32,14 @@ public class PaymentEventConsumer {
     private final OrderRepository orderRepository;
     private final KafkaEventPublisher kafkaEventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WarehouseClient warehouseClient;
 
     /**
      * Hört auf das Payment-Topic und fängt die asynchrone Erfolgsmeldung ab.
      */
 
     @KafkaListener(
-            topics = "${kafka.topics.audit-events}",
+            topics = "${kafka.topics.payment}",
             groupId = "shop-order-service-group"
     )
     @Transactional
@@ -75,11 +79,26 @@ public class PaymentEventConsumer {
             order.setPaymentId(payload.paymentId().toString());
             orderRepository.save(order);
 
+            // STEP 2: Warehouse reservieren
+            ReservationCommitedResponse reservationCommitedResponse = null;
+            try {
+                reservationCommitedResponse = warehouseClient.reservationCommited(order);
+            } catch (RestClientException ex) {
+                log.error("[WAREHOUSE ERROR] Warehouse unreachable for Order {}", order.getId(), ex);
+                systemAlert(order, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
+            }
+
+            // Safe Check to Reservation
+            if (reservationCommitedResponse == null || !reservationCommitedResponse.orderId().equals(order.getId()) || !reservationCommitedResponse.correlationId().equals(order.getCorrelationId()) || !reservationCommitedResponse.status().equalsIgnoreCase("Committed")) {
+                systemAlert(order, "RESERVATION NOT COMMITED", null);
+            }
+
             log.info("[Kafka-Consumer] Order {} erfolgreich auf COMPLETED aktualisiert.", order.getId());
 
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCompleted(finalOrder));
             safePublish(() -> kafkaEventPublisher.publishInvoiceRequested(finalOrder));
+
 
         } catch (Exception ex) {
             log.error("[Kafka-Consumer ERROR] Fehler beim Verarbeiten des Zahlungs-Events: {}", ex.getMessage(), ex);
@@ -132,24 +151,27 @@ public class PaymentEventConsumer {
 
         } catch (Exception ex) {
             log.error("[Kafka-Consumer ERROR] Fehler beim Verarbeiten des Zahlungs-Events: {}", ex.getMessage(), ex);
-
-            Map<String, String> metadata = Map.of(
-                    "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
-                    "exceptionClass", ex.getClass().getSimpleName()
-            );
-
-            SystemAlertPayload alertPayload = new SystemAlertPayload(
-                    UUID.randomUUID().toString(),
-                    "shop-service",
-                    order != null ? order.getId().toString() : "N/A",
-                    "Kritischer Ausfall! Grund: " + ex.getMessage(),
-                    Instant.now(),
-                    metadata
-            );
-
-            Order finalOrder1 = order;
-            safePublish(() -> kafkaEventPublisher.publishSystemAlert(finalOrder1, alertPayload));
+            systemAlert(order, "INTERNAL_ERROR", ex);
         }
+    }
+
+    private void systemAlert(Order order, String reason, Throwable exception) {
+
+        Map<String, String> metadata = Map.of(
+                "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
+                "exceptionClass", exception != null ? exception.getClass().getSimpleName() : "Unknown"
+        );
+
+        SystemAlertPayload alertPayload = new SystemAlertPayload(
+                UUID.randomUUID().toString(),
+                "shop-service",
+                order != null ? order.getId().toString() : "N/A",
+                "Kritischer Ausfall! Grund: " + reason + " | Details: " + (exception != null ? exception.getMessage() : "Keine"),
+                Instant.now(),
+                metadata
+        );
+
+        safePublish(() -> kafkaEventPublisher.publishSystemAlert(order, alertPayload));
     }
 
     private void safePublish(Runnable publishAction) {
@@ -159,4 +181,5 @@ public class PaymentEventConsumer {
             log.error("[Kafka-Consumer] Konnte folgendes OrderCompleted-Event nicht absenden: {}", e.getMessage());
         }
     }
+
 }

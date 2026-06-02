@@ -86,7 +86,8 @@ public class OrderApplicationService {
             // STEP 3: Total berechnen & Update auf PROCESSING
             BigDecimal total = calculateTotal(order.getItems());
 
-            order = orderTransactionHelper.updateToProcessing(order.getId(), total);
+            // Save ReservationId in order Tabelle (needed to commit reservation)
+            order = orderTransactionHelper.updateToProcessing(order.getId(), total, reservation.reservationId());
 
             // STEP 4: Payment aufrufen
             PaymentResponse payment;
@@ -136,7 +137,7 @@ public class OrderApplicationService {
 
     private BigDecimal calculateTotal(List<OrderItem> items) {
         return items.stream()
-                .map(OrderItem::getSubTotal)
+                .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -148,7 +149,10 @@ public class OrderApplicationService {
                         item.getProductName(),
                         item.getQuantity(),
                         item.getPricePerUnit(),
-                        item.getSubTotal()
+                        item.getSubTotal(),
+                        item.getTaxRate(),
+                        item.getTaxAmount(),
+                        item.getTotalPrice()
                 ))
                 .toList();
 

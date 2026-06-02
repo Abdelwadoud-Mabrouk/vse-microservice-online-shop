@@ -1,8 +1,8 @@
 package com.vseonlineshop.shopservice.service.client;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vseonlineshop.shopservice.domain.Order;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequest;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequestItem;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationResponse;
@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Mock-Implementation des Warehouse-Clients.
- * 
+ *
  * Echte Implementierung: RestTemplate / WebClient auf ${warehouse.base-url}/reservations
  * Mock gibt die Beispiel-Response zurück und leitet productName + unitPrice
  * aus einer statischen Produktdatenbank ab.
@@ -28,64 +28,69 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 
-
 @Service
 @Slf4j
 public class WarehouseClient {
 
+
     private final RestClient restClient;
 
-    // Die URL wird analog zum PaymentClient aus den application.properties geladen
-    public WarehouseClient(@Value("${services.warehouse.url}") String warehouseServiceUrl) {
+    public WarehouseClient(@Value("${services.warehouse.url}") String baseUrl) {
         this.restClient = RestClient.builder()
-                .baseUrl(warehouseServiceUrl)
+                .baseUrl(baseUrl)
                 .build();
     }
 
-    /**
-     * Sendet POST /reservations an den echten Warehouse-Service via RestClient.
-     */
     public ReservationResponse reserve(Order order) {
-        log.info("[WarehouseClient] Synchroner Call für Order={}", order.getId());
+        return post("/reservations",
+                order,
+                buildRequest(order),
+                ReservationResponse.class);
+    }
 
-        // Request-Payload aufbauen
-        ReservationRequest request = buildRequest(order);
-        log.debug("[WarehouseClient] Request Payload: {}", request);
+    public ReservationCommitedResponse reservationCommited(Order order) {
+        return post("/reservations/{id}/commit",
+                order,
+                buildRequest(order),
+                ReservationCommitedResponse.class,
+                order.getReservationId());
+    }
 
-        try{
-            ObjectMapper mapper = new ObjectMapper();
 
-            String json = mapper.writeValueAsString(request);
+    private <T> T post(String uri,
+                       Order order,
+                       Object body,
+                       Class<T> responseType,
+                       Object... uriVars) {
 
-            System.out.println(json);
-        }catch (Exception ex){
-            System.out.println("[WarehouseClient] Unerwarteter Fehler");
-        }
+        log.info("[WarehouseClient] POST {} for order={}", uri, order.getId());
+        log.debug("[WarehouseClient] Payload: {}", body);
 
         try {
             return restClient.post()
-                    .uri("/reservations")
+                    .uri(uri, uriVars)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Correlation-Id", order.getCorrelationId().toString())
-                    .body(request)
+                    .body(body)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, res) -> {
                         throw new RuntimeException(
-                                "Warehouse reservation failed: HTTP " + res.getStatusCode() +"_"+res.getBody()
+                                "Warehouse call failed: HTTP " + res.getStatusCode()
                         );
                     })
-                    .body(ReservationResponse.class);
+                    .body(responseType);
 
         } catch (RestClientException ex) {
-            log.error("[CRITICAL] Warehouse-Service ist DOWN für Order={}: {}", order.getId(), ex.getMessage());
+            log.error("[CRITICAL] Warehouse-Service DOWN for order={}", order.getId(), ex);
             throw ex;
         }
     }
 
+
     private ReservationRequest buildRequest(Order order) {
         List<ReservationRequestItem> items = order.getItems().stream()
-                .map(i -> new ReservationRequestItem(i.getProductId(), i.getQuantity(),i.getSku()))
+                .map(i -> new ReservationRequestItem(i.getProductId(), i.getQuantity(), i.getSku()))
                 .toList();
-        return new ReservationRequest( order.getId(), items);
+        return new ReservationRequest(order.getId(), items);
     }
 }
