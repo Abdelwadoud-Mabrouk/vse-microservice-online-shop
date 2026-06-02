@@ -115,6 +115,7 @@ public class KafkaEventPublisher {
                 txn.getRawResponse()
         );
         send(payment, auditEvents, "PAYMENT_SUCCEEDED", payload);
+        send(payment, paymentTopic, "PAYMENT_SUCCEEDED", payload);
     }
 
     // ── PAYMENT_FAILED ─────────────────────────────────────
@@ -132,6 +133,7 @@ public class KafkaEventPublisher {
                 txn.getRawResponse()
         );
         send(payment, auditEvents, "PAYMENT_FAILED", payload);
+        send(payment, paymentTopic, "PAYMENT_FAILED", payload);
     }
 
     // ── Interner Send (fire & forget) ──────────────────────
