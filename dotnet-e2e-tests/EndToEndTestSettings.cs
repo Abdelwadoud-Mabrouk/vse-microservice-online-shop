@@ -3,8 +3,8 @@ public sealed record EndToEndTestSettings(
     Uri WarehouseUrl,
     Uri InvoiceUrl,
     string KafkaBootstrapServers,
-    string PaymentSucceededTopic,
-    string AuditEventsTopic)
+    string OrdersTopic,
+    string BillingTopic)
 {
     public static EndToEndTestSettings FromEnvironment()
     {
@@ -13,8 +13,8 @@ public sealed record EndToEndTestSettings(
             ReadUri("E2E_WAREHOUSE_URL", "http://localhost:5082"),
             ReadUri("E2E_INVOICE_URL", "http://localhost:5083"),
             Environment.GetEnvironmentVariable("E2E_KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092",
-            Environment.GetEnvironmentVariable("E2E_PAYMENT_SUCCEEDED_TOPIC") ?? "payment-succeeded",
-            Environment.GetEnvironmentVariable("E2E_AUDIT_EVENTS_TOPIC") ?? "audit-events");
+            Environment.GetEnvironmentVariable("E2E_ORDERS_TOPIC") ?? "orders",
+            Environment.GetEnvironmentVariable("E2E_BILLING_TOPIC") ?? "billing");
     }
 
     private static Uri ReadUri(string name, string fallback)

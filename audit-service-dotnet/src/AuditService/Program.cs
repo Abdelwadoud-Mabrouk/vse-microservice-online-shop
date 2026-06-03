@@ -13,6 +13,8 @@ builder.Services.AddAuditKafkaConsumers(builder.Configuration);
 
 var app = builder.Build();
 
+await app.InitializeAuditDatabaseAsync();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseMiddleware<AdminBasicAuthMiddleware>();

@@ -13,7 +13,7 @@ public sealed class KafkaTestProducer : IDisposable
         }).Build();
     }
 
-    public async Task PublishAuditEventAsync(
+    public async Task PublishServiceEventAsync(
         string topic,
         Guid correlationId,
         string eventType,
@@ -51,7 +51,7 @@ public sealed class KafkaTestProducer : IDisposable
         {
             eventId = Guid.NewGuid(),
             correlationId,
-            eventType = "PaymentSucceeded",
+            eventType = "PAYMENT_SUCCEEDED",
             service = "billing-service",
             timestamp = DateTimeOffset.UtcNow,
             payload = new
@@ -89,7 +89,58 @@ public sealed class KafkaTestProducer : IDisposable
         await PublishAsync(topic, correlationId, envelope, cancellationToken);
     }
 
-    public async Task PublishInvalidPaymentSucceededAsync(
+    public async Task PublishOrderCompletedAsync(
+        string topic,
+        Guid correlationId,
+        Guid orderId,
+        Product product,
+        string transactionId,
+        string customerEmail,
+        CancellationToken cancellationToken)
+    {
+        var envelope = new
+        {
+            eventId = Guid.NewGuid(),
+            correlationId,
+            eventType = "ORDER_COMPLETED",
+            service = "shop-service",
+            timestamp = DateTimeOffset.UtcNow,
+            payload = new
+            {
+                orderId,
+                transactionId,
+                totalAmount = product.UnitPrice,
+                currency = "EUR",
+                customerEmail,
+                customer = new
+                {
+                    name = "Max Mustermann",
+                    email = customerEmail,
+                    street = "Musterstrasse 12",
+                    postalCode = "58507",
+                    city = "Luedenscheid",
+                    country = "Deutschland"
+                },
+                items = new[]
+                {
+                    new
+                    {
+                        sku = product.Sku,
+                        name = product.Name,
+                        quantity = 1,
+                        unitPrice = product.UnitPrice
+                    }
+                }
+            },
+            previousEventId = (Guid?)null,
+            actor = "shop-service",
+            statusCode = "SUCCESS"
+        };
+
+        await PublishAsync(topic, correlationId, envelope, cancellationToken);
+    }
+
+    public async Task PublishInvalidOrderCompletedAsync(
         string topic,
         Guid correlationId,
         Guid orderId,
@@ -100,14 +151,14 @@ public sealed class KafkaTestProducer : IDisposable
         {
             eventId = Guid.NewGuid(),
             correlationId,
-            eventType = "PaymentSucceeded",
-            service = "billing-service",
+            eventType = "ORDER_COMPLETED",
+            service = "shop-service",
             timestamp = DateTimeOffset.UtcNow,
             payload = new
             {
                 orderId,
-                transactionId = "tx-invalid-payment",
-                amount = 99.99m,
+                transactionId = "tx-invalid-order",
+                totalAmount = 99.99m,
                 currency = "EUR",
                 customerEmail,
                 customer = new
@@ -121,7 +172,7 @@ public sealed class KafkaTestProducer : IDisposable
                 }
             },
             previousEventId = (Guid?)null,
-            actor = "billing-service",
+            actor = "shop-service",
             statusCode = "SUCCESS"
         };
 

@@ -15,8 +15,8 @@ public sealed class WorstCaseFlowTests
         await client.AssertHealthyAsync(cts.Token);
         await client.EnsureProductAsync(TestData.SoldOut, 0, cts.Token);
 
-        await kafka.PublishAuditEventAsync(
-            settings.AuditEventsTopic,
+        await kafka.PublishServiceEventAsync(
+            settings.OrdersTopic,
             correlationId,
             "ORDER_CREATED",
             "shop-service",
@@ -30,19 +30,19 @@ public sealed class WorstCaseFlowTests
 
         await client.WaitForAuditEventAsync(correlationId, "WAREHOUSE_OUT_OF_STOCK", cts.Token);
 
-        await kafka.PublishAuditEventAsync(
-            settings.AuditEventsTopic,
+        await kafka.PublishServiceEventAsync(
+            settings.OrdersTopic,
             correlationId,
             "ORDER_CANCELLED",
             "shop-service",
-            "FAILURE",
+            "SUCCESS",
             new { orderId, reason = "out_of_stock" },
             cts.Token);
         await client.WaitForAuditEventAsync(correlationId, "ORDER_CANCELLED", cts.Token);
     }
 
     [Fact]
-    public async Task Invoice_service_ignores_invalid_payment_event_without_creating_invoice()
+    public async Task Invoice_service_ignores_invalid_order_completed_event_without_creating_invoice()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var settings = EndToEndTestSettings.FromEnvironment();
@@ -54,8 +54,8 @@ public sealed class WorstCaseFlowTests
         var customerEmail = $"invalid-payment-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}@example.com";
 
         await client.AssertHealthyAsync(cts.Token);
-        await kafka.PublishInvalidPaymentSucceededAsync(
-            settings.PaymentSucceededTopic,
+        await kafka.PublishInvalidOrderCompletedAsync(
+            settings.OrdersTopic,
             correlationId,
             orderId,
             customerEmail,

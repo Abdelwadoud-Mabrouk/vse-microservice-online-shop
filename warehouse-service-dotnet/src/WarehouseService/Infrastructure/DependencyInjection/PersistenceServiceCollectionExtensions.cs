@@ -4,6 +4,7 @@ using WarehouseService.Infrastructure;
 using WarehouseService.Infrastructure.Kafka;
 using WarehouseService.Infrastructure.Persistence;
 using WarehouseService.Infrastructure.Persistence.Repositories;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace WarehouseService.Infrastructure.DependencyInjection;
 
@@ -15,12 +16,14 @@ public static class PersistenceServiceCollectionExtensions
             ?? configuration["WAREHOUSE_DB_CONNECTION"]
             ?? throw new InvalidOperationException("Warehouse database connection is missing. Set WAREHOUSE_DB_CONNECTION.");
 
-        services.AddDbContext<WarehouseDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<WarehouseDbContext>(options => options
+            .UseNpgsql(connectionString)
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
         services.AddScoped<IWarehouseRepository, EfWarehouseRepository>();
         services.AddSingleton(new AuditKafkaOptions
         {
             BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
-            Topic = configuration["KAFKA_AUDIT_EVENTS_TOPIC"] ?? "audit-events"
+            Topic = configuration["KAFKA_WAREHOUSE_TOPIC"] ?? "warehouse"
         });
         services.AddSingleton<IAuditSink, KafkaAuditSink>();
 

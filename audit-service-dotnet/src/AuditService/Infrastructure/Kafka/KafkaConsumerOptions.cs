@@ -4,9 +4,9 @@ public sealed class KafkaConsumerOptions
 {
     public string? BootstrapServers { get; init; }
 
-    public string AuditEventsTopic { get; init; } = "audit-events";
+    public IReadOnlyList<string> Topics { get; init; } = ["orders", "billing", "warehouse", "invoices"];
 
     public string ConsumerGroupId { get; init; } = "audit-service";
 
-    public bool Enabled => !string.IsNullOrWhiteSpace(BootstrapServers);
+    public bool Enabled => !string.IsNullOrWhiteSpace(BootstrapServers) && Topics.Count > 0;
 }

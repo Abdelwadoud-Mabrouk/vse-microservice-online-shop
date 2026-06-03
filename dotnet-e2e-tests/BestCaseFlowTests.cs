@@ -32,8 +32,8 @@ public sealed class BestCaseFlowTests
         var customerEmail = $"{label}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}@example.com";
         var transactionId = $"tx-{label}-{Guid.NewGuid():N}";
 
-        await kafka.PublishAuditEventAsync(
-            settings.AuditEventsTopic,
+        await kafka.PublishServiceEventAsync(
+            settings.OrdersTopic,
             correlationId,
             "ORDER_CREATED",
             "shop-service",
@@ -46,29 +46,29 @@ public sealed class BestCaseFlowTests
         await client.WaitForAuditEventAsync(correlationId, "WAREHOUSE_RESERVED", cancellationToken);
 
         await kafka.PublishPaymentSucceededAsync(
-            settings.PaymentSucceededTopic,
+            settings.BillingTopic,
             correlationId,
             orderId,
             product,
             transactionId,
             customerEmail,
             cancellationToken);
-
-        var invoiceId = await client.WaitForInvoiceAsync(customerEmail, cancellationToken);
-        await client.AssertInvoicePdfExistsAsync(invoiceId, cancellationToken);
-        await client.WaitForAuditEventAsync(correlationId, "INVOICE_CREATED", cancellationToken);
+        await client.WaitForAuditEventAsync(correlationId, "PAYMENT_SUCCEEDED", cancellationToken);
 
         await client.CommitReservationAsync(correlationId, reservationId, cancellationToken);
         await client.WaitForAuditEventAsync(correlationId, "WAREHOUSE_COMMITTED", cancellationToken);
 
-        await kafka.PublishAuditEventAsync(
-            settings.AuditEventsTopic,
+        await kafka.PublishOrderCompletedAsync(
+            settings.OrdersTopic,
             correlationId,
-            "ORDER_COMPLETED",
-            "shop-service",
-            "SUCCESS",
-            new { orderId, invoiceId },
+            orderId,
+            product,
+            transactionId,
+            customerEmail,
             cancellationToken);
         await client.WaitForAuditEventAsync(correlationId, "ORDER_COMPLETED", cancellationToken);
+        var invoiceId = await client.WaitForInvoiceAsync(customerEmail, cancellationToken);
+        await client.AssertInvoicePdfExistsAsync(invoiceId, cancellationToken);
+        await client.WaitForAuditEventAsync(correlationId, "INVOICE_CREATED", cancellationToken);
     }
 }

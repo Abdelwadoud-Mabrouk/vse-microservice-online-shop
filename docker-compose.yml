@@ -109,6 +109,23 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   # =========================
+  # Kafka Topics
+  # =========================
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - kafka
+    command:
+      - bash
+      - -c
+      - |
+        cub kafka-ready -b kafka:29092 1 60
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic orders --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic billing --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic warehouse --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic invoices --partitions 1 --replication-factor 1
+
+  # =========================
   # Audit Service
   # =========================
   audit-service:
@@ -122,7 +139,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:?Set ADMIN_USERNAME in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      KAFKA_AUDIT_EVENTS_TOPIC: ${KAFKA_AUDIT_EVENTS_TOPIC:-audit-events}
+      KAFKA_AUDIT_TOPICS: ${KAFKA_AUDIT_TOPICS:-orders,billing,warehouse,invoices}
       KAFKA_AUDIT_CONSUMER_GROUP: ${KAFKA_AUDIT_CONSUMER_GROUP:-audit-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
@@ -130,8 +147,8 @@ services:
         condition: service_healthy
       warehouse-db:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:
@@ -148,15 +165,15 @@ services:
       AUDIT_SERVICE_URL: http://audit-service:8080
       WAREHOUSE_DB_CONNECTION: Host=warehouse-db;Port=5432;Database=${WAREHOUSE_DB_NAME:?Set WAREHOUSE_DB_NAME in .env};Username=${WAREHOUSE_DB_USER:?Set WAREHOUSE_DB_USER in .env};Password=${WAREHOUSE_DB_PASSWORD:?Set WAREHOUSE_DB_PASSWORD in .env}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      KAFKA_AUDIT_EVENTS_TOPIC: ${KAFKA_AUDIT_EVENTS_TOPIC:-audit-events}
+      KAFKA_WAREHOUSE_TOPIC: ${KAFKA_WAREHOUSE_TOPIC:-warehouse}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       audit-service:
         condition: service_started
       warehouse-db:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:
@@ -175,15 +192,16 @@ services:
       INVOICE_FORCE_FAILURE: "false"
       INVOICE_DATA_DIR: /app/data/invoices
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      KAFKA_PAYMENT_SUCCEEDED_TOPIC: payment-succeeded
-      KAFKA_AUDIT_EVENTS_TOPIC: ${KAFKA_AUDIT_EVENTS_TOPIC:-audit-events}
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders}
+      KAFKA_INVOICES_TOPIC: ${KAFKA_INVOICES_TOPIC:-invoices}
+
       KAFKA_INVOICE_CONSUMER_GROUP: ${KAFKA_INVOICE_CONSUMER_GROUP:-invoice-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       audit-service:
         condition: service_started
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:

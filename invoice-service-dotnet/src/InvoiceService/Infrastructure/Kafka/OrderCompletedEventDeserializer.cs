@@ -4,14 +4,21 @@ using InvoiceService.Domain;
 
 namespace InvoiceService.Infrastructure.Kafka;
 
-public static class PaymentSucceededEventDeserializer
+public static class OrderCompletedEventDeserializer
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public static PaymentSucceededEvent Deserialize(string message)
+    public static bool CanHandle(string message)
+    {
+        using var document = JsonDocument.Parse(message);
+        var root = document.RootElement;
+        return string.Equals(ReadString(root, "eventType"), "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static OrderCompletedEvent Deserialize(string message)
     {
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
@@ -25,21 +32,27 @@ public static class PaymentSucceededEventDeserializer
         var customer = ReadCustomer(payload);
         var items = ReadItems(payload);
 
-        return new PaymentSucceededEvent(
+        var eventType = ReadString(root, "eventType") ?? "ORDER_COMPLETED";
+        if (!string.Equals(eventType, "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new JsonException("Invoice service only handles ORDER_COMPLETED events.");
+        }
+
+        return new OrderCompletedEvent(
             ReadGuid(root, "eventId", required: false) ?? Guid.NewGuid(),
             correlationId,
-            ReadString(root, "eventType") ?? "PaymentSucceeded",
-            ReadString(root, "service") ?? "billing-service",
-            ReadDateTime(root, "timestamp") ?? DateTimeOffset.UtcNow,
+            eventType,
+            ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service",
+            ReadDateTime(root, "timestamp") ?? ReadDateTime(root, "occurredAt") ?? DateTimeOffset.UtcNow,
             ReadGuid(payload, "orderId") ?? Guid.Empty,
-            ReadString(payload, "transactionId") ?? string.Empty,
-            ReadDecimal(payload, "amount"),
+            ReadString(payload, "transactionId") ?? ReadString(payload, "paymentId") ?? string.Empty,
+            ReadDecimal(payload, "amount", "totalAmount"),
             ReadString(payload, "currency") ?? string.Empty,
             ReadString(payload, "customerEmail") ?? customer.Email,
             customer,
             items,
             ReadGuid(root, "previousEventId", required: false),
-            ReadString(root, "actor") ?? ReadString(root, "service") ?? "billing-service",
+            ReadString(root, "actor") ?? ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service",
             ReadString(root, "statusCode") ?? "SUCCESS");
     }
 
@@ -47,7 +60,7 @@ public static class PaymentSucceededEventDeserializer
     {
         if (!payload.TryGetProperty("customer", out var customer))
         {
-            throw new JsonException("PaymentSucceeded event is missing customer details.");
+            throw new JsonException("ORDER_COMPLETED event is missing customer details.");
         }
 
         var email = ReadString(customer, "email")
@@ -67,7 +80,7 @@ public static class PaymentSucceededEventDeserializer
     {
         if (!payload.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
         {
-            throw new JsonException("PaymentSucceeded event is missing invoice items.");
+            throw new JsonException("ORDER_COMPLETED event is missing invoice items.");
         }
 
         return items.EnumerateArray()
@@ -106,14 +119,17 @@ public static class PaymentSucceededEventDeserializer
             : null;
     }
 
-    private static decimal ReadDecimal(JsonElement element, string name)
+    private static decimal ReadDecimal(JsonElement element, params string[] names)
     {
-        if (!element.TryGetProperty(name, out var value) || !value.TryGetDecimal(out var result))
+        foreach (var name in names)
         {
-            throw new JsonException($"{name} must be a decimal number.");
+            if (element.TryGetProperty(name, out var value) && value.TryGetDecimal(out var result))
+            {
+                return result;
+            }
         }
 
-        return result;
+        throw new JsonException($"{string.Join(" or ", names)} must be a decimal number.");
     }
 
     private static int ReadInt(JsonElement element, string name)
