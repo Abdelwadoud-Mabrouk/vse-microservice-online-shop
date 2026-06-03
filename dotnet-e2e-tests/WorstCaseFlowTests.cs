@@ -35,7 +35,7 @@ public sealed class WorstCaseFlowTests
             correlationId,
             "ORDER_CANCELLED",
             "shop-service",
-            "FAILURE",
+            "SUCCESS",
             new { orderId, reason = "out_of_stock" },
             cts.Token);
         await client.WaitForAuditEventAsync(correlationId, "ORDER_CANCELLED", cts.Token);
