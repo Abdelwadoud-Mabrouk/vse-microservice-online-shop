@@ -15,7 +15,7 @@ public static class InvoiceInfrastructureServiceCollectionExtensions
             return new AuditKafkaOptions
             {
                 BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
-                Topic = configuration["KAFKA_AUDIT_EVENTS_TOPIC"] ?? "audit-events"
+                Topic = configuration["KAFKA_INVOICES_TOPIC"] ?? "invoices"
             };
         });
         services.AddSingleton<IAuditSink, KafkaAuditSink>();
@@ -25,11 +25,11 @@ public static class InvoiceInfrastructureServiceCollectionExtensions
             return new KafkaConsumerOptions
             {
                 BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
-                PaymentSucceededTopic = configuration["KAFKA_PAYMENT_SUCCEEDED_TOPIC"] ?? "payment-succeeded",
+                OrdersTopic = configuration["KAFKA_ORDERS_TOPIC"] ?? "orders",
                 ConsumerGroupId = configuration["KAFKA_INVOICE_CONSUMER_GROUP"] ?? "invoice-service"
             };
         });
-        services.AddHostedService<PaymentSucceededKafkaConsumer>();
+        services.AddHostedService<OrderCompletedKafkaConsumer>();
 
         return services;
     }

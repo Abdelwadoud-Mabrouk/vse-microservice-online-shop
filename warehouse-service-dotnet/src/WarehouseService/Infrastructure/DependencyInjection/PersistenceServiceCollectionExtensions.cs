@@ -20,7 +20,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddSingleton(new AuditKafkaOptions
         {
             BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
-            Topic = configuration["KAFKA_AUDIT_EVENTS_TOPIC"] ?? "audit-events"
+            Topic = configuration["KAFKA_WAREHOUSE_TOPIC"] ?? "warehouse"
         });
         services.AddSingleton<IAuditSink, KafkaAuditSink>();
 

@@ -14,7 +14,7 @@ public sealed class AuditEventKafkaConsumer(
         if (!options.Enabled)
         {
             logger.LogInformation(
-                "Kafka consumer disabled for operation {Operation}. Set KAFKA_BOOTSTRAP_SERVERS to enable it.",
+                "Kafka consumer disabled for operation {Operation}. Set KAFKA_BOOTSTRAP_SERVERS and KAFKA_AUDIT_TOPICS to enable it.",
                 "audit.kafka.audit_events.consume");
             return;
         }
@@ -43,11 +43,11 @@ public sealed class AuditEventKafkaConsumer(
                 }
             })
             .Build();
-        consumer.Subscribe(options.AuditEventsTopic);
+        consumer.Subscribe(options.Topics);
 
         logger.LogInformation(
-            "Kafka consumer subscribed to topic {Topic} with group {ConsumerGroupId}",
-            options.AuditEventsTopic,
+            "Kafka consumer subscribed to topics {Topics} with group {ConsumerGroupId}",
+            string.Join(", ", options.Topics),
             options.ConsumerGroupId);
 
         while (!stoppingToken.IsCancellationRequested)

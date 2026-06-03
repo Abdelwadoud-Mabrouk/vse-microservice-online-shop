@@ -54,10 +54,41 @@ Kafka wird genutzt, wenn ein Schritt im Hintergrund passieren kann.
 Beispiel:
 
 ```text
-Billing -> Kafka -> Invoice
+Shop -> Kafka -> Invoice
 ```
 
-Nach einer erfolgreichen Zahlung erstellt der Invoice-Service die Rechnung asynchron.
+Nach einer abgeschlossenen Bestellung (`ORDER_COMPLETED`) erstellt der Invoice-Service die Rechnung asynchron.
+
+### Kafka Topics
+
+Topic-Namen orientieren sich an den Service-/Domänennamen. Ein Service publiziert seine Events in sein eigenes Topic. Die Event-Namen beschreiben das fachliche Ereignis.
+
+| Topic | Publisher | Bedeutung |
+| :--- | :--- | :--- |
+| `orders` | Shop-Service | Events rund um den Bestellprozess |
+| `billing` | Billing-Service | Events rund um Zahlungen |
+| `warehouse` | Warehouse-Service | Events rund um Lager und Reservierungen |
+| `invoices` | Invoice-Service | Events rund um Rechnungen |
+
+Beispiel: Der Billing-Service publiziert in das Topic `billing`, aber die Events heißen fachlich `PAYMENT_INITIALIZED`, `PAYMENT_SUCCEEDED` und `PAYMENT_FAILED`.
+
+Geplante Events pro Topic:
+
+| Topic | Events |
+| :--- | :--- |
+| `orders` | `ORDER_CREATED`, `ORDER_COMPLETED`, `ORDER_CANCELLED`, `RESERVATION_ROLLBACK_REQUESTED` |
+| `billing` | `PAYMENT_INITIALIZED`, `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED` |
+| `warehouse` | `WAREHOUSE_RESERVED`, `WAREHOUSE_COMMITTED`, `WAREHOUSE_RESERVATION_CANCELLED`, `WAREHOUSE_OUT_OF_STOCK` |
+| `invoices` | `INVOICE_CREATION_STARTED`, `INVOICE_CREATED`, `INVOICE_CREATION_FAILED` |
+
+Wichtige Consumer:
+
+| Service | Konsumiert |
+| :--- | :--- |
+| Audit-Service | `orders`, `billing`, `warehouse`, `invoices` |
+| Invoice-Service | `orders`, verarbeitet `ORDER_COMPLETED` |
+| Warehouse-Service | später `orders`, für `ORDER_COMPLETED` und `RESERVATION_ROLLBACK_REQUESTED` |
+| Shop-Service | `billing`, für `PAYMENT_SUCCEEDED` und `PAYMENT_FAILED` |
 
 ## Event-Idee
 
@@ -84,9 +115,9 @@ Happy Path:
 OrderCreated
 StockReserved
 PaymentSucceeded
+OrderCompleted
 InvoiceCreated
 StockCommitted
-OrderCompleted
 ```
 
 Fehlerfälle:
