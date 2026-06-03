@@ -1,216 +1,677 @@
-# Architekturübersicht
+# Architekturdokumentation - Order Processing System
 
-Dieses Dokument erklärt die Architektur des Online-Shop-Projekts einfach und praktisch.
+Dieses Dokument beschreibt die Architektur des Microservice-basierten Bestellsystems gemäß den Anforderungen. Das System implementiert einen hybriden Kommunikationsansatz (REST & Kafka) und ein Event-Sourcing-Light System zur Auditierung.
 
-Das System besteht aus mehreren Services. Jeder Service hat eine eigene Aufgabe.
+> Die aktuellen Mermaid-Diagramme für die Gesamtarchitektur befinden sich in [system-diagrams.md](./system-diagrams.md).
 
-## Ziel des Systems
+> Hinweis: Die aktuell implementierten .NET-Services (Warehouse, Invoice, Audit) sind zusätzlich mit Mermaid-Diagrammen in [dotnet-services-diagrams.md](./dotnet-services-diagrams.md) dokumentiert.
 
-Ein Kunde soll eine Bestellung auslösen können.
+---
 
-Dabei passieren mehrere Schritte:
+## 1. Systemkontext-Diagramm
 
-1. Bestellung wird angenommen.
-2. Lagerbestand wird reserviert.
-3. Zahlung wird durchgeführt.
-4. Rechnung wird erstellt.
-5. Wichtige Schritte werden im Audit gespeichert.
+Das Systemkontext-Diagramm beschreibt die Abgrenzung des „Order Processing Systems“ zu externen Akteuren und externen Systemen. Es zeigt, welche Benutzer und Fremdsysteme mit der Microservice-Landschaft interagieren.
 
-## Services
 
-Java-Services:
+[Systemkontext-Diagramm](./images/system-context.png)
 
-- `shop-service-java`: Einstiegspunkt für Bestellungen und Orchestrierung.
-- `billing-service-java`: Zahlung und Payment-Fassade.
+![img.png](images/img.png)
 
-.NET-Services:
+*   **Kunde:** Initiiert den Bestellprozess über den Shop-Service.
+*   **Payment-Provider-Stubs:** Externe Schnittstellen (Simulatoren) für die Zahlungsabwicklung (z. B. Klarna, PayPal).
+*   **System-Grenze:** Das "Order Processing System" kapselt alle internen Validierungs-, Lager- und Abrechnungsprozesse.
 
-- `warehouse-service-dotnet`: Lagerbestand und Reservierungen.
-- `invoice-service-dotnet`: Rechnungserstellung.
-- `audit-service-dotnet`: zentrale Audit-Historie.
+---
 
-## Kommunikation
+## 2. Komponentendiagramm
+Die Architektur basiert auf einem hybriden Kommunikationsansatz aus synchronen REST-Aufrufen und asynchroner Event-Kommunikation über Kafka.
 
-Das System nutzt REST und Kafka.
+![img.png](./images/system-context.png)
 
-### REST
+Das System besteht aus mehreren unabhängigen Microservices:
 
-REST wird genutzt, wenn direkt eine Antwort gebraucht wird.
+* Shop-Service
+* Warehouse-Service
+* Billing-Service
+* Payment-Fassade
+* Invoice-Service
+* Audit-Service
 
-Beispiel:
+Die Services kommunizieren über einen hybriden Ansatz aus synchroner REST-Kommunikation und asynchroner Event-Kommunikation über Kafka.
 
-```text
-Shop -> Warehouse
-```
+* **Synchron:**
+    * Shop-Service ↔ Warehouse-Service
+    * Shop-Service ↔ Billing-Service
 
-Der Shop muss direkt wissen, ob Produkte reserviert werden konnten.
+* **Asynchron (Kafka Events):**
+    * Billing-Service → Invoice-Service
+    * Billing-Service → Warehouse-Service
+    * Alle Services → Audit-Service
 
-Auch zwischen Shop und Billing ist REST sinnvoll, weil der Shop eine direkte Zahlungsantwort braucht.
+Jeder Service besitzt eine eigene Datenbank („Database per Service“), um geringe Kopplung, unabhängige Skalierung und klare Verantwortlichkeiten zu gewährleisten.
+Übersicht der internen Services, Schnittstellen und Kommunikationswege.
 
-### Kafka
+Zusätzlich umfasst das System eine Monitoring- und Logging-Infrastruktur:
 
-Kafka wird genutzt, wenn ein Schritt im Hintergrund passieren kann.
+![img_2.png](images/monitoring.png)
 
-Beispiel:
 
-```text
-Shop -> Kafka -> Invoice
-```
+* **Prometheus**
+    * sammelt Metriken aller Services
 
-Nach einer abgeschlossenen Bestellung (`ORDER_COMPLETED`) erstellt der Invoice-Service die Rechnung asynchron.
+* **Loki**
+    * zentralisiert Logs aller Services
 
-### Kafka Topics
+* **Grafana**
+    * visualisiert Metriken und Logs für Monitoring und Fehleranalyse durch Administratoren
+---
 
-Topic-Namen orientieren sich an den Service-/Domänennamen. Ein Service publiziert seine Events in sein eigenes Topic. Die Event-Namen beschreiben das fachliche Ereignis.
+## 3. Sequenzdiagramm - Happy Path (UML)
+Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 
-| Topic | Publisher | Bedeutung |
+![Sequenzdiagramm Happy Path](./images/happy-path.png)
+
+**Kernschritte:**
+1. **Order Initiation:** Shop-Service generiert eine `correlationId` und publiziert `ORDER_PLACED`.
+2. **Synchronous Reservation:** Warehouse-Service reserviert Artikel via REST.
+3. **Synchronous Payment:** Billing-Service delegiert via Payment-Fassade an den Provider.
+4. **Asynchronous Processing:** Nach `PAYMENT_SUCCESS` erstellt der Invoice-Service die PDF und das Warehouse bucht den Bestand endgültig aus.
+5. **Completion:** Shop-Service setzt den Status auf `COMPLETED`.
+
+---
+
+## 4. Sequenzdiagramm - Fehlerszenario (UML)
+
+[Sequenzdiagramm Fehlerszenario](./images/error-scenario.png)
+
+---
+
+# 5. Event-Konzept
+
+## Architektur-Grundlage
+
+- **Kafka** ist der zentrale Message Bus für alle asynchronen Prozesse
+- Zwei Verbindungen bleiben **synchron per REST**, weil der Shop-Service die Antwort abwarten muss, bevor der Bestellstatus gesetzt werden kann
+
+---
+
+## Synchron REST
+
+| Von | Nach | Grund |
+|-----|------|-------|
+| Shop-Service | Warehouse-Service | Lagerprüfung und Reservierung müssen bestätigt sein |
+| Shop-Service | Billing-Service | Zahlungsbestätigung muss vorliegen bevor `COMPLETED` gesetzt wird |
+
+---
+
+## Kafka-Architektur: Event-Fluss & Designentscheidungen
+
+---
+
+###  Topics & Events
+
+# Kafka-Architektur: Event-Fluss & Designentscheidungen
+
+---
+
+### . Topics & Events
+
+#### `orders` – Bestellprozess (Publisher: Shop-Service)
+
+| Event | Consumer | Reaktion |
 | :--- | :--- | :--- |
-| `orders` | Shop-Service | Events rund um den Bestellprozess |
-| `billing` | Billing-Service | Events rund um Zahlungen |
-| `warehouse` | Warehouse-Service | Events rund um Lager und Reservierungen |
-| `invoices` | Invoice-Service | Events rund um Rechnungen |
+| `ORDER_CREATED` | Audit | Persistiert Start der Bestellung. |
+| `ORDER_COMPLETED` | Audit, **Invoice**, Warehouse | **Erstellt PDF-Rechnung.** Warehouse bucht Lager ab (`STOCK_COMMITTED`). |
+| `ORDER_CANCELLED` | Audit, Notification | Informiert Kunden über Storno. |
+| `RESERVATION_ROLLBACK_REQUESTED` | Audit, **Warehouse** | **Warehouse gibt reservierte Artikel frei** (`STOCK_RELEASED`). |
 
-Beispiel: Der Billing-Service publiziert in das Topic `billing`, aber die Events heißen fachlich `PAYMENT_INITIALIZED`, `PAYMENT_SUCCEEDED` und `PAYMENT_FAILED`.
+#### `payments` – Zahlungen (Publisher: Billing-Service)
 
-Geplante Events pro Topic:
+| Event | Consumer | Reaktion |
+| :--- | :--- | :--- |
+| `PAYMENT_INITIALIZED` | Audit | Persistiert Start des Bezahlvorgangs. |
+| `PAYMENT_SUCCEEDED` | Audit, **Shop** | **Setzt Order auf `COMPLETED`.** |
+| `PAYMENT_FAILED` | Audit, **Shop** | **Triggert `ORDER_CANCELLED` + `RESERVATION_ROLLBACK_REQUESTED`.** |
 
-| Topic | Events |
-| :--- | :--- |
-| `orders` | `ORDER_CREATED`, `ORDER_COMPLETED`, `ORDER_CANCELLED`, `RESERVATION_ROLLBACK_REQUESTED` |
-| `billing` | `PAYMENT_INITIALIZED`, `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED` |
-| `warehouse` | `WAREHOUSE_RESERVED`, `WAREHOUSE_COMMITTED`, `WAREHOUSE_RESERVATION_CANCELLED`, `WAREHOUSE_OUT_OF_STOCK` |
-| `invoices` | `INVOICE_CREATION_STARTED`, `INVOICE_CREATED`, `INVOICE_CREATION_FAILED` |
+#### `warehouse` – Lager (Publisher: Warehouse-Service)
 
-Wichtige Consumer:
+| Event | Consumer | Reaktion |
+| :--- | :--- | :--- |
+| `STOCK_RESERVED` | Audit | Protokolliert erfolgreiche Reservierung (nach REST vom Shop). |
+| `STOCK_COMMITTED` | Audit | Protokolliert finale Ausbuchung (nach `ORDER_COMPLETED`). |
+| `STOCK_RELEASED` | Audit | Protokolliert Freigabe (nach `RESERVATION_ROLLBACK_REQUESTED`). |
+| `STOCK_RESERVATION_FAILED` | Audit, **Shop** | **Triggert `ORDER_CANCELLED` + `RESERVATION_ROLLBACK_REQUESTED`.** |
 
-| Service | Konsumiert |
-| :--- | :--- |
-| Audit-Service | `orders`, `billing`, `warehouse`, `invoices` |
-| Invoice-Service | `orders`, verarbeitet `ORDER_COMPLETED` |
-| Warehouse-Service | später `orders`, für `ORDER_COMPLETED` und `RESERVATION_ROLLBACK_REQUESTED` |
-| Shop-Service | `billing`, für `PAYMENT_SUCCEEDED` und `PAYMENT_FAILED` |
+#### `invoices` – Buchhaltung (Publisher: Invoice-Service)
 
-## Event-Idee
+| Event | Consumer | Reaktion |
+| :--- | :--- | :--- |
+| `INVOICE_REQUESTED` | Audit | Versendet PDF-Rechnung an Kunden. |
 
-Für asynchrone Kommunikation wird ein Event-Envelope verwendet.
+---
 
-Ein Event enthält Metadaten und eine fachliche Payload.
+##  Warum dedizierte Topics?
 
-Wichtige Felder sind:
+1. **Fehler-Isolierung:** Eine „Poison Pill" in `payments` blockiert nur die Zahlungsverarbeitung – `orders` und `warehouse` laufen weiter.
+2. **Weniger Netzlast:** Services empfangen nur fachlich relevante Events, statt alles zu filtern.
+3. **Schema-Evolution:** Jedes Team versioniert seine Events unabhängig.
 
-- `eventId`
-- `eventType`
-- `source` oder `service`
-- `correlationId`
-- `timestamp`
-- `payload`
+---
 
-Die `correlationId` verbindet alle Events einer Bestellung.
+##  Warum konsumiert Invoice `ORDER_COMPLETED` statt `PAYMENT_SUCCEEDED`?
 
-## Wichtige Event-Flows
+1. **Steuerrecht:** Die Rechnung darf erst bei gesichertem Leistungsaustausch ausgestellt werden. `ORDER_COMPLETED` bestätigt, dass auch das Lager erfolgreich abgebucht hat.
+2. **Datenvollständigkeit:** Das `ORDER_COMPLETED`-Event enthält Adresse, Artikelnamen und Steuersätze – der Payment-Service kennt nur Finanzdaten.
+3. **Keine Stornorechnung nötig:** Eine zu früh erstellte Rechnung müsste bei späterem Abbruch aufwendig storniert werden.
 
-Happy Path:
+---
 
-```text
-OrderCreated
-StockReserved
-PaymentSucceeded
-OrderCompleted
-InvoiceCreated
-StockCommitted
+## 4. Audit-Service
+
+Abonniert alle vier Topics simultan. Speichert in **PostgreSQL** nach dem **Append-Only-Prinzip** (nur `INSERT`, kein `UPDATE`/`DELETE`) – für lückenlose Compliance und Support-Nachvollziehbarkeit.
+
+---
+
+## Event-Übersicht
+
+| Event | Topic | Happy Path |
+| :--- | :--- | :---: |
+| `ORDER_CREATED` | `orders` | ✅ |
+| `STOCK_RESERVED` | `warehouse` | ✅ |
+| `PAYMENT_INITIALIZED` | `payments` | ✅ |
+| `PAYMENT_SUCCEEDED` | `payments` | ✅ |
+| `ORDER_COMPLETED` | `orders` | ✅ |
+| `STOCK_COMMITTED` | `warehouse` | ✅ |
+| `INVOICE_REQUESTED` | `invoices` | ✅ |
+| `STOCK_RESERVATION_FAILED` | `warehouse` | ❌ |
+| `PAYMENT_FAILED` | `payments` | ❌ |
+| `RESERVATION_ROLLBACK_REQUESTED` | `orders` | ❌ |
+| `ORDER_CANCELLED` | `orders` | ❌ |
+| `STOCK_RELEASED` | `warehouse` | ❌ |
+
+---
+
+## Problem: Redundante Event-DTOs
+
+Ein naiver Ansatz erstellt pro Ereignis eine eigene Klasse (`OrderCreatedEvent`, `PaymentSucceededEvent` …), die jeweils dieselben Metadaten (`eventId`, `source`, `occurredAt`, `correlationId`) wiederholt. Der Audit-Service müsste jeden Typ separat behandeln und bei jedem neuen Event-Typ angepasst werden.
+---
+
+## Problem: Redundante Event-DTOs
+
+Ein naiver Ansatz erstellt pro Ereignis eine eigene Klasse (`OrderCreatedEvent`, `PaymentSucceededEvent` …), die jeweils dieselben Metadaten (`eventId`, `source`, `occurredAt`, `correlationId`) wiederholt. Der Audit-Service müsste jeden Typ separat behandeln und bei jedem neuen Event-Typ angepasst werden.
+
+## Problem: spezifische Event-DTOs pro Ereignis
+
+Ein naiver Ansatz würde für jedes Ereignis eine eigene Klasse erstellen:
+
+```
+OrderCreatedEvent.java
+OrderCompletedEvent.java
+OrderCancelledEvent.java
+ReservationRollbackEvent.java
+PaymentSucceededEvent.java
+...
 ```
 
-Fehlerfälle:
+Jede Klasse trägt dabei dieselben Metadaten – `eventId`, `source`, `occurredAt`,
+`correlationId` – redundant wiederholt. Der AuditService müsste jeden dieser Typen
+kennen und separat behandeln. Kommt ein neuer Event-Typ hinzu, muss der AuditService
+angepasst werden, obwohl er inhaltlich nichts Neues tut.
 
-```text
-StockReservationFailed
-PaymentFailed
-OrderCancelled
-ReservationRollbackRequested
-StockReleased
+---
+
+## Lösung: Envelope Pattern mit `DomainEvent<T>`
+
+```
+┌────────────────────────────────────────────┐
+│              DomainEvent<T>                │  ← einheitlicher Wrapper (Envelope)
+│                                            │
+│  eventId        UUID       (Deduplizierung)│
+│  eventType      String     ("ORDER_CREATED")│
+│  source         String     ("shop-service") │
+│  correlationId  UUID       (Flow-Tracking)  │
+│  occurredAt     LocalDateTime               │
+│  payload        T          ← fachlicher    │
+│                               Inhalt        │
+└────────────────────────────────────────────┘
 ```
 
-## Warum diese Architektur?
+Der Envelope trennt zwei Verantwortlichkeiten sauber:
 
-Der Vorteil dieser Lösung ist:
+| Teil | Inhalt | Ändert sich |
+|---|---|---|
+| Envelope | technische Metadaten | selten |
+| Payload `T` | fachlicher Inhalt pro Event | häufig, pro Service |
 
-- Jeder Service bleibt fachlich überschaubar.
-- Warehouse, Invoice und Audit können getrennt getestet werden.
-- Fehler lassen sich über Logs und Audit besser nachvollziehen.
-- Kafka entkoppelt Hintergrundprozesse.
-- REST bleibt dort, wo direkte Antworten nötig sind.
+### Vorteile
 
-## Audit
+**1 – AuditService ist vollständig entkoppelt**
 
-Der Audit-Service speichert wichtige Ereignisse dauerhaft.
+Der AuditService konsumiert Events aus allen Topics (`orders`, `warehouse`,
+`payments`, `invoices`) und persistiert alles. Er muss `payload` nie
+deserialisieren – er speichert es als rohen JSON-String (JSONB):
 
-Jedes Event enthält eine `correlationId`. Damit kann man alle Schritte einer Bestellung zusammen anzeigen.
+```java
+DomainEvent<JsonNode> envelope = objectMapper.readValue(raw, new TypeReference<>(){});
 
-Beispiel:
-
-```text
-ORDER_CREATED
-WAREHOUSE_RESERVED
-PAYMENT_SUCCEEDED
-INVOICE_CREATED
-ORDER_COMPLETED
+AuditEvent.builder()
+    .eventId(envelope.eventId())
+    .eventType(envelope.eventType())     // "ORDER_CANCELLED"
+    .source(envelope.source())           // "shop-service"
+    .correlationId(envelope.correlationId())
+    .payload(envelope.payload().toString()) // roher JSON-Blob → JSONB
+    .build();
 ```
 
-Der Audit-Service arbeitet append-only: Ereignisse werden hinzugefügt, aber fachlich nicht verändert.
+Ein neuer Event-Typ aus einem neuen Service wird **automatisch gespeichert**,
+ohne eine einzige Code-Änderung im AuditService.
 
-## Logging und Grafana
+**2 – Idempotenz über `eventId`**
 
-Die .NET-Services schreiben strukturierte Logs.
+Kafka garantiert *at-least-once*. Dasselbe Event kann doppelt ankommen.
+Jeder Consumer kann Duplikate anhand der `eventId` erkennen und überspringen:
 
-Diese Logs können in Grafana angezeigt werden.
-
-Damit kann man z.B. suchen:
-
-```text
-correlationId="..."
-status="FAILURE"
-eventType="PaymentSucceeded"
+```java
+if (processedEventRepository.existsByEventId(envelope.eventId())) {
+    return; // Duplikat – bereits verarbeitet
+}
 ```
 
-Das hilft beim Debugging und bei der Fehlersuche.
+**3 – Korrelation über den gesamten Flow**
 
-## Datenbanken
+Alle Events einer einzigen Order tragen dieselbe `correlationId`.
+Im AuditService lässt sich damit der komplette Lebenszyklus einer Order
+in chronologischer Reihenfolge rekonstruieren:
 
-Es wird das Prinzip "Database per Service" verwendet.
+```
+correlationId: abc-123
+├── ORDER_CREATED             (shop-service)
+├── STOCK_RESERVED            (warehouse-service)
+├── PAYMENT_INITIATED         (shop-service)
+├── PAYMENT_SUCCEEDED         (payment-service)
+└── ORDER_COMPLETED           (shop-service)
+```
 
-Aktuell wichtig:
+**4 – Andere Services deserialisieren nur was sie brauchen**
 
-- Shop-Service nutzt eine eigene PostgreSQL-Datenbank.
-- Warehouse-Service nutzt eine eigene PostgreSQL-Datenbank.
-- Audit-Service nutzt eine eigene PostgreSQL-Datenbank.
-- Invoice-Service speichert PDF-Rechnungen und Metadaten im Dateisystem.
+WarehouseService und InvoiceService empfangen ebenfalls `DomainEvent<JsonNode>`,
+prüfen `eventType` und deserialisieren `payload` nur bei relevanten Events
+in ihre eigene lokale Payload-Klasse:
 
-## Wichtige Dokumente
+```java
+switch (envelope.eventType()) {
+    case "RESERVATION_ROLLBACK_REQUESTED" -> {
+        ReservationRollbackPayload p =
+            objectMapper.treeToValue(envelope.payload(), ReservationRollbackPayload.class);
+        reservationService.rollback(p.reservationId());
+    }
+    default -> { /* ignorieren */ }
+}
+```
 
-- [Systemdiagramme](system-diagrams.md)
-- [.NET Überblick](dotnet-overview.md)
-- [.NET Diagramme](dotnet-services-diagrams.md)
-- [Kafka im .NET-Teil](kafka-integration-dotnet.md)
-- [Audit Flow](audit-flow.md)
-- [Logging und Observability](logging-observability.md)
+---
 
-## Aktueller Stand
+## Shared-Kernel Modul
 
-Aktuell wurde bereits umgesetzt:
+`DomainEvent<T>` ist ein **technischer Vertrag**, der von allen Services
+gleich interpretiert werden muss. Deswegen liegt er in einem minimalen
+`shared-kernel`-Modul.
 
-- .NET Services mit sauberer Struktur.
-- Warehouse mit PostgreSQL.
-- Audit mit PostgreSQL.
-- Invoice mit PDF-Dateien und Metadaten.
-- Kafka für Invoice und Audit.
-- REST für Warehouse.
-- Strukturierte Logs.
-- Grafana/Loki/OpenTelemetry lokal.
-- Tests für wichtige Teile.
+```
+vseonlineshop/
+├── shared-kernel/                ← nur DomainEvent<T>, keine fachlichen Klassen
+│   └── DomainEvent.java
+│
+├── shop-service/                 ← dependency: shared-kernel
+│   └── event/
+│       ├── OrderCreatedPayload.java     ← fachlich, bleibt lokal
+│       └── OrderCompletedPayload.java
+│
+├── warehouse-service/            ← dependency: shared-kernel
+│   └── event/
+│       └── ReservationRollbackPayload.java  ← eigene lokale Kopie
+│
+└── audit-service/                ← dependency: shared-kernel
+    └── (keine Payload-Klassen)   ← JsonNode reicht
+```
 
-Noch offen:
+### Warum Payload-DTOs NICHT im shared-kernel?
 
-- Java- und .NET-Events final abstimmen.
-- Mehr End-to-End-Tests bauen.
-- Grafana-Dashboards ergänzen.
-- Admin UI später weiter verbessern.
+Payload-DTOs sind **fachliche Verträge** die sich häufig ändern. Würden sie
+geteilt, entsteht versteckte Kopplung: eine Änderung in `OrderCreatedPayload`
+im Shop zwingt alle Services zum gleichzeitigen Update – der Kernvorteil
+von Microservices (unabhängige Deployments) geht verloren.
+
+Jeder Consumer definiert seine eigene lokale Payload-Klasse mit genau den
+Feldern, die er braucht. Felder die er nicht kennt, ignoriert Jackson
+automatisch (`FAIL_ON_UNKNOWN_PROPERTIES = false`).
+
+| | `DomainEvent<T>` | Payload DTOs |
+|---|---|---|
+| Charakter | technisch | fachlich |
+| Ändert sich | selten | häufig |
+| Wo | `shared-kernel` | lokal pro Service |
+| Wer braucht es | alle Services | nur der jeweilige Consumer |
+---
+
+## 6. Service Design
+
+### 6.1 Shop-Service Design
+
+### ER-Diagramm
+![Shop](./images/shop-erd.png)
+
+### Entscheidung: Verwendung von UUIDs als Primärschlüssel
+
+**Begründung:**
+
+* **Schutz vor ID Enumeration Attacks**
+    * Fortlaufende IDs (`/orders/1001`) sind leicht erratbar.
+    * UUIDs sind zufällig und nicht vorhersagbar.
+    * Erhöht die Sicherheit gegen unbefugten Zugriff auf fremde Ressourcen.
+
+* **Dezentrale ID-Generierung**
+    * IDs können direkt im Service generiert werden (`UUID.randomUUID()`).
+    * Keine Abhängigkeit von der Datenbank zur ID-Erzeugung.
+
+* **Asynchrone Entkopplung**
+    * Die ID steht bereits vor der Persistierung für Kafka-Events und REST-Aufrufe bereit.
+    * Unterstützt event-getriebene Microservice-Kommunikation ohne blockierende Datenbankoperationen.
+
+* **Schutz von Geschäftsgeheimnissen**
+    * UUIDs verhindern Rückschlüsse auf Bestellvolumen oder Unternehmenswachstum durch fortlaufende IDs.
+
+* **Globale Eindeutigkeit**
+    * UUIDs sind weltweit eindeutig.
+    * Mehrere Services können unabhängig Entitäten erzeugen, ohne ID-Konflikte zu riskieren.
+
+### API-Design
+
+### Synchroner Flow mit parallelem Kafka
+
+```
+Client ──POST /orders──► Shop-Service
+   { productId, quantity }     │
+                               │──── Kafka: OrderCreated ──► AuditService
+                               │                             (fire & forget)
+                    ┌──────────▼──────────┐
+                    │ 1. Warehouse-Service │ (REST sync)
+                    │  POST /reservations  │
+                    │  ← reservationId     │
+                    │  ← productName       │──── Kafka: StockReserved ──► AuditService
+                    │  ← unitPrice         │                              (fire & forget)
+                    └──────────┬───────────┘
+                               │ Shop berechnet totalAmount
+                    ┌──────────▼──────────┐
+                    │ 2. Billing-Service   │ (REST sync)
+                    │  POST /payments      │──── Kafka: PaymentInitiated ──► AuditService
+                    │  { totalAmount }     │                                 (fire & forget)
+                    │                      │
+                    │  Payment Provider    │
+                    │  returns SUCCESS     │
+                    │  ← 200 CONFIRMED     │──── Kafka: PaymentSucceeded ──► InvoiceService
+                    └──────────┬───────────┘                             ──► AuditService
+                               │                                         ──► Warehouse
+                    ┌──────────▼──────────┐                                  (alle async)
+                    │ 3. DB Update         │
+                    │  status = COMPLETED  │──── Kafka: OrderCompleted ──► AuditService
+                    └──────────┬───────────┘                               (fire & forget)
+                               │
+Client ◄── 201 COMPLETED ──────┘
+```
+
+> **Kafka = fire-and-forget:** Jeder Service publiziert seinen Event
+> sofort und wartet nicht auf Consumer. Der Client wartet
+> ausschliesslich auf die synchrone REST-Kette.
+
+---
+
+### POST /orders
+
+### Request vom Client
+
+> Client schickt **keine Preise** — Preise kommen von Warehouse.
+> Verhindert Preismanipulation durch den Client.
+
+```http
+POST /orders
+Content-Type: application/json
+```
+
+```json
+{
+  "userId": "uuid-optional",
+  "items": [
+    { "productId": "A1", "quantity": 2 },
+    { "productId": "B3", "quantity": 1 }
+  ],
+  "currency": "EUR"
+}
+```
+
+**Intern generiert (nicht vom Client):**
+- `id` / `correlationId` → eine UUID, vor DB-Insert generiert
+- `totalAmount` → berechnet aus Warehouse-Antwort: `sum(quantity × unitPrice)`
+- `status` → startet intern als `PENDING`
+- `createdAt`, `updatedAt` → Timestamps
+
+---
+
+### Schritt 1 — Shop → Warehouse (intern)
+
+**Shop schickt an Warehouse:**
+```json
+POST /reservations
+
+{
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "order_id": "550e8400-e29b-41d4-a716-446655440001",
+  "items": [
+    { "productId": "A1", "quantity": 2 },
+    { "productId": "B3", "quantity": 1 }
+  ]
+}
+```
+
+**Warehouse antwortet Shop mit `201`:**
+```json
+{
+  "reservationId": "550e8400-e29b-41d4-a716-446655440000",
+  "order_id": "550e8400-e29b-41d4-a716-446655440001",
+  "items": [
+    {
+      "productId": "A1",
+      "productName": "Nike Air Max",
+      "quantity": 2,
+      "unitPrice": 89.99
+    },
+    {
+      "productId": "B3",
+      "productName": "Adidas Hose",
+      "quantity": 1,
+      "unitPrice": 49.99
+    }
+  ]
+}
+```
+
+**Was Shop aus dieser Antwort macht:**
+
+| Feld | Verwendung |
+|------|------------|
+| `reservationId` | Gespeichert in ORDER — nötig um Reservierung bei `PaymentFailed` freizugeben |
+| `productName` | Snapshot → gespeichert in ORDER_ITEM |
+| `unitPrice` | Snapshot → gespeichert in ORDER_ITEM + Berechnung totalAmount |
+| `totalAmount` | `(2 × 89.99) + (1 × 49.99) = 229.97` → weiter an Billing |
+
+---
+
+### Schritt 2 — Shop → Billing (intern)
+
+```json
+POST /payments
+
+{
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "orderId": "order-uuid",
+  "totalAmount": 229.97,
+  "currency": "EUR"
+}
+```
+**Billing antwortet Shop — Erfolg `200 OK`:**
+```json
+{
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "paymentId": "pay-uuid-9c1f",
+  "status": "CONFIRMED",
+  "paidAt": "2024-01-15T10:00:02Z"
+}
+```
+
+**Billing antwortet Shop — Fehler `402`:**
+```json
+{
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "FAILED",
+  "reason": "INSUFFICIENT_FUNDS"
+}
+```
+---
+
+### Response — Erfolg `201 Created`
+
+```json
+{
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "COMPLETED",
+  "totalAmount": 229.97,
+  "currency": "EUR",
+  "createdAt": "2024-01-15T10:00:00Z",
+  "items": [
+    {
+      "productId": "A1",
+      "productName": "Nike Air Max",
+      "quantity": 2,
+      "unitPrice": 89.99
+    },
+    {
+      "productId": "B3",
+      "productName": "Adidas Hose",
+      "quantity": 1,
+      "unitPrice": 49.99
+    }
+  ]
+}
+```
+
+### Response — Fehler
+
+#### `400 Bad Request`
+```json
+{ "status": 400, "error": "BAD_REQUEST", "message": "items must not be empty" }
+```
+
+#### `409 Conflict` — Lager nicht verfügbar
+```json
+{ "status": 409, "error": "STOCK_UNAVAILABLE", "message": "Product A1 is out of stock" }
+```
+
+#### `402 Payment Required` — Zahlung fehlgeschlagen
+```json
+{ "status": 402, "error": "PAYMENT_FAILED", "message": "Payment declined by provider" }
+```
+
+#### `503 Service Unavailable`
+```json
+{ "status": 503, "error": "SERVICE_UNAVAILABLE", "message": "Downstream service temporarily unavailable." }
+```
+
+---
+
+## GET /orders/{orderId}
+
+```http
+GET /orders/550e8400-e29b-41d4-a716-446655440000
+```
+
+### Response `200 OK`
+```json
+{
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "COMPLETED",
+  "totalAmount": 229.97,
+  "currency": "EUR",
+  "createdAt": "2024-01-15T10:00:00Z",
+  "items": [
+    { "productId": "A1", "productName": "Nike Air Max", "quantity": 2, "unitPrice": 89.99 },
+    { "productId": "B3", "productName": "Adidas Hose",  "quantity": 1, "unitPrice": 49.99 }
+  ]
+}
+```
+
+### Response `404 Not Found`
+```json
+{ "status": 404, "error": "ORDER_NOT_FOUND", "message": "Order 550e8400 not found" }
+```
+
+---
+
+## GET /actuator/health
+```json
+{ "status": "UP" }
+```
+
+---
+
+## Status-Übergänge
+
+```
+PENDING ──► PROCESSING ──► COMPLETED
+                │
+                └──► CANCELLED  (Stock nicht verfügbar / Payment fehlgeschlagen)
+```
+
+| Status | Wann | Sichtbar für Client? |
+|--------|------|-------------------|
+| `PENDING` | Order angelegt | intern            |
+| `PROCESSING` | Warehouse OK, Payment läuft |  intern           |
+| `COMPLETED` | Alles erfolgreich | in Response       |
+| `CANCELLED` | Fehler bei Warehouse oder Payment |  als Error-Response |
+
+### 6.2 Billing-Service Design
+- Payment
+- Transaction
+
+---
+
+## 7. Architectural Decision Records (ADRs)
+
+### ADR 1: Wahl des Message Brokers (Kafka)
+*   **Entscheidung:** Nutzung von Apache Kafka für die inter-Service Kommunikation.
+*   **Begründung:** Kafka bietet hohe Persistenz und Skalierbarkeit. Es ermöglicht dem Invoice-Service und Warehouse-Service, Events unabhängig voneinander zu konsumieren, auch wenn ein Service kurzzeitig offline ist (Resilienz).
+
+### ADR 2: Persistenzstrategie für Audit-Snapshots
+*   **Entscheidung:** Relationale Datenbank mit Append-Only Strategie im Audit-Service.
+*   **Begründung:** Um Unveränderlichkeit zu garantieren, werden Snapshots nur per `INSERT` gespeichert. Die relationale Struktur erlaubt eine effiziente Abfrage über `GET /audit/orders/{correlationId}` sortiert nach Zeitstempeln.
+
+### ADR 3: Kommunikationsmuster (Hybrider Ansatz)
+*   **Entscheidung:** Synchrones REST für User-Interaktionen, asynchrones Kafka für Hintergrundprozesse.
+*   **Begründung:** Bestandsprüfung und Zahlung erfordern sofortiges Feedback für den Kunden. Rechnungsdruck und Archivierung sind zeitunkritisch und werden zur Lastverteilung asynchron entkoppelt.
+
+---
+
+## 8. Erweiterbarkeitsanalyse
+
+Um einen vierten Zahlungsanbieter (z. B. "CryptoPay") zu integrieren, sind folgende Schritte nötig:
+
+### Geänderte Dateien/Komponenten:
+*   **Billing-Service (Payment-Fassade):** Implementierung einer neuen Klasse `CryptoPayAdapter`, die das interne `PaymentProvider`-Interface bedient.
+*   **Configuration:** Hinzufügen der neuen Provider-Credentials (API-Key, Endpoint) in der `application.properties` oder `config.json`.
+*   **Factory/Registry:** Registrierung des neuen Providers in der Fassaden-Logik, damit dieser über das `method`-Feld im Request angesteuert werden kann.
+
+### Unveränderte Dateien/Komponenten:
+*   **Shop-Service:** Die Schnittstelle zum Billing-Service bleibt identisch (`POST /payments`).
+*   **Invoice- & Warehouse-Service:** Diese erhalten weiterhin nur das standardisierte `PAYMENT_SUCCESS`-Event von Kafka, unabhängig vom gewählten Anbieter.
+*   **Audit-Service:** Das Event-Format für Snapshots bleibt konsistent.

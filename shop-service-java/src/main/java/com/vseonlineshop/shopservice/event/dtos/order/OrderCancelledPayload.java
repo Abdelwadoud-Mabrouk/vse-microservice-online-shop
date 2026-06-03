@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.event.dtos;
+package com.vseonlineshop.shopservice.event.dtos.order;
 
 import java.util.UUID;
 

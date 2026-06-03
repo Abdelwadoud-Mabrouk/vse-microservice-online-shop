@@ -1,20 +1,18 @@
-package com.vseonlineshop.shopservice.service;
+package com.vseonlineshop.shopservice.service.client;
 
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.dto.payment.CartItemDTO;
 import com.vseonlineshop.shopservice.dto.payment.PaymentRequest;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
-import com.vseonlineshop.shopservice.dto.payment.PaymentStatus;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.util.UUID;
 
 
 /**
@@ -31,7 +29,7 @@ public class PaymentClient {
     private final RestClient restClient;
     private final OrderRepository orderRepository;
 
-    public PaymentClient(@Value("${services.payment.url}") String paymentServiceUrl, KafkaEventPublisher kafkaEventPublisher, OrderRepository orderRepository) {
+    public PaymentClient(@Value("${services.payment.url}") String paymentServiceUrl, OrderRepository orderRepository) {
         this.restClient = RestClient.builder()
                 .baseUrl(paymentServiceUrl)
                 .build();
@@ -59,7 +57,7 @@ public class PaymentClient {
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
-                    .onStatus(status -> status.isError(), (req, res) -> {
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
                         throw new RuntimeException(
                                 "Payment failed: HTTP " + res.getStatusCode()
                         );

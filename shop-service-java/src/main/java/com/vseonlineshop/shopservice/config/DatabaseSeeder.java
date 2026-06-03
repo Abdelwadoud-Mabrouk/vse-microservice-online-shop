@@ -51,7 +51,14 @@ public class DatabaseSeeder implements CommandLineRunner {
             lamp.setCategory("Lampen");
             lamp.setPrice(new BigDecimal("79.95"));
 
-            productRepository.saveAll(List.of(bed, desk, lamp));
+            Product product = new Product();
+            product.setId(UUID.fromString("11111111-1111-4111-8111-111111111111"));
+            product.setSku("SKU-CHAIR-OAK");
+            product.setName("test");
+            product.setCategory("test");
+            product.setPrice(new BigDecimal("79.95"));
+
+            productRepository.saveAll(List.of(bed, desk, lamp, product));
 
             log.info("[SUCCESS] Database successfully seeded with 3 test products.");
         } else {

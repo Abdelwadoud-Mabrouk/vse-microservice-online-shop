@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.event.dtos;
+package com.vseonlineshop.shopservice.event.dtos.order;
 
 import java.math.BigDecimal;
 import java.util.UUID;

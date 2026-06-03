@@ -1,22 +1,19 @@
-package com.vseonlineshop.shopservice.service;
+package com.vseonlineshop.shopservice.service.shop;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderItem;
 import com.vseonlineshop.shopservice.domain.OrderStatus;
-import com.vseonlineshop.shopservice.domain.Product;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
-import com.vseonlineshop.shopservice.dto.shop.ItemRequest;
 import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
 import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
 import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
 import com.vseonlineshop.shopservice.dto.warehouse.*;
-import com.vseonlineshop.shopservice.event.dtos.SystemAlertPayload;
-import com.vseonlineshop.shopservice.exception.BusinessException;
-import com.vseonlineshop.shopservice.exception.OrderNotFoundException;
-import com.vseonlineshop.shopservice.exception.PaymentServiceException;
-import com.vseonlineshop.shopservice.exception.ServiceUnavailableException;
+import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
+import com.vseonlineshop.shopservice.exception.*;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
-import com.vseonlineshop.shopservice.repository.ProductRepository;
+import com.vseonlineshop.shopservice.event.producer.KafkaEventPublisher;
+import com.vseonlineshop.shopservice.service.client.PaymentClient;
+import com.vseonlineshop.shopservice.service.client.WarehouseClient;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +27,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -67,7 +63,7 @@ public class OrderApplicationService {
         } catch (Exception ex) {
             log.error("[CRITICAL] Konnte initiale Order nicht in DB anlegen: {}", ex.getMessage());
             cancelOrder(null, null, "CREATION_ORDER_FAILED", ex);
-            throw new ServiceUnavailableException("DATABASE_ERROR", "Bestellung konnte nicht angelegt werden.");
+            throw new GlobalException("DATABASE_ERROR", "Bestellung konnte nicht angelegt werden.");
         }
 
         ReservationResponse reservation = null;
@@ -120,7 +116,7 @@ public class OrderApplicationService {
                 UUID resId = (reservation != null) ? reservation.orderId() : null;
 
                 cancelOrder(order, resId, "ORDER_PROCESSING_INTERNAL_ERROR", ex);
-                throw new ServiceUnavailableException("INTERNAL_SYSTEM_ERROR", "Ein interner Fehler ist aufgetreten. Bestellung storniert.");
+                throw new GlobalException("INTERNAL_SYSTEM_ERROR", "Ein interner Fehler ist aufgetreten. Bestellung storniert.");
             }
 
             throw ex;

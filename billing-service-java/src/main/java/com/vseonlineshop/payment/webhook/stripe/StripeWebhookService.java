@@ -79,8 +79,17 @@ public class StripeWebhookService {
         // 5. Routing des Event-Typs
         switch (eventType) {
             case "payment_intent.succeeded" -> handleSuccess(payment, checkoutSessionId, rawResponse, Instant.now());
-            case "payment_intent.payment_failed" ->
-                    handleFailure(payment, checkoutSessionId, "Stripe card declined", rawResponse, Instant.now());
+            case "payment_intent.payment_failed" -> {
+                String dynamischerFehlergrund = "Unbekannter Zahlungsfehler";
+
+                if (paymentIntent.getLastPaymentError() != null) {
+                    var stripeError = paymentIntent.getLastPaymentError();
+
+                    dynamischerFehlergrund = stripeError.getCode() + ": " + stripeError.getMessage();
+                }
+
+                handleFailure(payment, checkoutSessionId, dynamischerFehlergrund, rawResponse, Instant.now());
+            }
             default -> handleInformativeEvent(payment, checkoutSessionId, eventType, rawResponse);
         }
     }

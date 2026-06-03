@@ -13,8 +13,16 @@ public class KafkaConfig {
     @Value("${kafka.topics.orders}")
     private String ordersTopic;
 
+    @Value("${kafka.topics.audit-events}")
+    private String auditEvents;
+
     @Bean
     public NewTopic orderCreatedTopic() {
         return TopicBuilder.name(ordersTopic).partitions(1).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic eventTopic() {
+        return TopicBuilder.name(auditEvents).partitions(1).replicas(1).build();
     }
 }
