@@ -109,6 +109,23 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   # =========================
+  # Kafka Topics
+  # =========================
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - kafka
+    command:
+      - bash
+      - -c
+      - |
+        cub kafka-ready -b kafka:29092 1 60
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic orders --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic billing --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic warehouse --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic invoices --partitions 1 --replication-factor 1
+
+  # =========================
   # Audit Service
   # =========================
   audit-service:
@@ -130,8 +147,8 @@ services:
         condition: service_healthy
       warehouse-db:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:
@@ -155,8 +172,8 @@ services:
         condition: service_started
       warehouse-db:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:
@@ -182,8 +199,8 @@ services:
     depends_on:
       audit-service:
         condition: service_started
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     ports:

@@ -21,6 +21,7 @@ public static class AuditDatabaseApplicationBuilderExtensions
             "Applying audit database migrations for service {Service}",
             "audit-service");
 
+        await MarkInitialMigrationAppliedForExistingSchemaAsync(dbContext, cancellationToken: default);
         await dbContext.Database.MigrateAsync();
 
         logger.LogInformation(
@@ -28,5 +29,45 @@ public static class AuditDatabaseApplicationBuilderExtensions
             "audit-service");
 
         return app;
+    }
+
+    private static async Task MarkInitialMigrationAppliedForExistingSchemaAsync(
+        AuditDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_name = 'audit_snapshots'
+                ) THEN
+                    CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+                        "MigrationId" character varying(150) NOT NULL,
+                        "ProductVersion" character varying(32) NOT NULL,
+                        CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+                    );
+
+                    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                    SELECT '20260519190000_InitialAuditSchema', '10.0.4'
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM "__EFMigrationsHistory"
+                        WHERE "MigrationId" = '20260519190000_InitialAuditSchema'
+                    );
+                END IF;
+            END $$;
+            """;
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

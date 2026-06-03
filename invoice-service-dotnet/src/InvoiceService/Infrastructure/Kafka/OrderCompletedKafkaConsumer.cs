@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Confluent.Kafka;
 using InvoiceService.Application;
 
@@ -163,6 +164,8 @@ public sealed class OrderCompletedKafkaConsumer(
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException)
         {
+            await RecordRejectedOrderCompletedAsync(result.Message.Value, exception, cancellationToken);
+
             logger.LogWarning(
                 exception,
                 "Kafka message rejected with status {Status}, errorCode {ErrorCode}, exceptionType {ExceptionType}, durationMs {DurationMs}",
@@ -173,4 +176,87 @@ public sealed class OrderCompletedKafkaConsumer(
             consumer.Commit(result);
         }
     }
+
+    private async Task RecordRejectedOrderCompletedAsync(
+        string message,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRejectedOrderCompleted(message, out var rejectedEvent))
+        {
+            return;
+        }
+
+        using var serviceScope = scopeFactory.CreateScope();
+        var audit = serviceScope.ServiceProvider.GetRequiredService<IAuditSink>();
+        await audit.RecordAsync(
+            rejectedEvent.CorrelationId,
+            "INVOICE_CREATION_FAILED",
+            "FAILURE",
+            new
+            {
+                rejectedEvent.OrderId,
+                reason = exception.Message,
+                errorCode = "INVALID_ORDER_COMPLETED_EVENT",
+                sourceEventType = "ORDER_COMPLETED",
+                sourceService = rejectedEvent.Service
+            },
+            cancellationToken);
+    }
+
+    private static bool TryReadRejectedOrderCompleted(string message, out RejectedOrderCompletedEvent rejectedEvent)
+    {
+        rejectedEvent = default;
+
+        try
+        {
+            using var document = JsonDocument.Parse(message);
+            var root = document.RootElement;
+            if (!string.Equals(ReadString(root, "eventType"), "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var payload = root.TryGetProperty("payload", out var payloadElement)
+                ? payloadElement
+                : root;
+            var correlationId = ReadGuid(root, "correlationId")
+                ?? ReadGuid(payload, "correlationId");
+            if (correlationId is null)
+            {
+                return false;
+            }
+
+            rejectedEvent = new RejectedOrderCompletedEvent(
+                correlationId.Value,
+                ReadGuid(payload, "orderId"),
+                ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service");
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static Guid? ReadGuid(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && Guid.TryParse(value.GetString(), out var guid)
+            ? guid
+            : null;
+    }
+
+    private static string? ReadString(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private readonly record struct RejectedOrderCompletedEvent(
+        Guid CorrelationId,
+        Guid? OrderId,
+        string Service);
 }
