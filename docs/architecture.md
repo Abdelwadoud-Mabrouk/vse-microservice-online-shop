@@ -116,7 +116,7 @@ Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 
 ### . Topics & Events
 
-#### `orders` – Bestellprozess (Publisher: Shop-Service)
+#### `shop` – Bestellprozess (Publisher: Shop-Service)
 
 | Event | Consumer | Reaktion |
 | :--- | :--- | :--- |
@@ -125,7 +125,7 @@ Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 | `ORDER_CANCELLED` | Audit, Notification | Informiert Kunden über Storno. |
 | `RESERVATION_ROLLBACK_REQUESTED` | Audit, **Warehouse** | **Warehouse gibt reservierte Artikel frei** (`STOCK_RELEASED`). |
 
-#### `payments` – Zahlungen (Publisher: Billing-Service)
+#### `billing` – Zahlungen (Publisher: Billing-Service)
 
 | Event | Consumer | Reaktion |
 | :--- | :--- | :--- |
@@ -135,14 +135,14 @@ Der erfolgreiche Ablauf einer Bestellung ohne Fehlerzustände.
 
 #### `warehouse` – Lager (Publisher: Warehouse-Service)
 
-| Event | Consumer | Reaktion |
-| :--- | :--- | :--- |
-| `STOCK_RESERVED` | Audit | Protokolliert erfolgreiche Reservierung (nach REST vom Shop). |
-| `STOCK_COMMITTED` | Audit | Protokolliert finale Ausbuchung (nach `ORDER_COMPLETED`). |
-| `STOCK_RELEASED` | Audit | Protokolliert Freigabe (nach `RESERVATION_ROLLBACK_REQUESTED`). |
-| `STOCK_RESERVATION_FAILED` | Audit, **Shop** | **Triggert `ORDER_CANCELLED` + `RESERVATION_ROLLBACK_REQUESTED`.** |
+| Event                            | Consumer | Reaktion |
+|:---------------------------------| :--- | :--- |
+| `WREHOUSE_RESERVED`               | Audit | Protokolliert erfolgreiche Reservierung (nach REST vom Shop). |
+| `WREHOUSE_COMMITTED`             | Audit | Protokolliert finale Ausbuchung (nach `ORDER_COMPLETED`). |
+| `WREHOUSE_RELEASED`              | Audit | Protokolliert Freigabe (nach `RESERVATION_ROLLBACK_REQUESTED`). |
+| `WREHOUSE_RESERVATION_FAILED`            | Audit, **Shop** | **Triggert `ORDER_CANCELLED` + `RESERVATION_ROLLBACK_REQUESTED`.** |
 
-#### `invoices` – Buchhaltung (Publisher: Invoice-Service)
+#### `invoice` – Buchhaltung (Publisher: Invoice-Service)
 
 | Event | Consumer | Reaktion |
 | :--- | :--- | :--- |
