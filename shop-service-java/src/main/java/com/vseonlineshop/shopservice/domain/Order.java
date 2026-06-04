@@ -29,6 +29,9 @@ public class Order {
     @Column(name = "user_id")
     private UUID userId;
 
+    @Column(name = "reservation_id", unique = true)
+    private UUID  reservationId;
+
     @Column(name = "payment_id", unique = true)
     private String paymentId;
 
@@ -56,7 +59,6 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
-    // Helper method for Bi-directional mapping
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);

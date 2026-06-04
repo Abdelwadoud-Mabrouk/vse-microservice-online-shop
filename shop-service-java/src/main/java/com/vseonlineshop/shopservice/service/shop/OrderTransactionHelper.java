@@ -1,9 +1,6 @@
 package com.vseonlineshop.shopservice.service.shop;
 
-import com.vseonlineshop.shopservice.domain.Order;
-import com.vseonlineshop.shopservice.domain.OrderItem;
-import com.vseonlineshop.shopservice.domain.OrderStatus;
-import com.vseonlineshop.shopservice.domain.Product;
+import com.vseonlineshop.shopservice.domain.*;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
 import com.vseonlineshop.shopservice.dto.shop.ItemRequest;
 import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
@@ -19,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -36,10 +32,11 @@ public class OrderTransactionHelper {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order updateToProcessing(UUID orderId, BigDecimal total) {
+    public Order updateToProcessing(UUID orderId, BigDecimal total, UUID reservationId) {
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.setTotalAmount(total);
         order.setStatus(OrderStatus.PROCESSING);
+        order.setReservationId(reservationId);
         order.setUpdatedAt(LocalDateTime.now());
         return orderRepository.save(order);
     }
@@ -55,6 +52,7 @@ public class OrderTransactionHelper {
     }
 
     private Order buildInitialOrder(OrderRequest request, UUID correlationId) {
+
         Order order = new Order();
         order.setCorrelationId(correlationId);
         order.setUserId(request.userId());
@@ -63,26 +61,42 @@ public class OrderTransactionHelper {
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(BigDecimal.ZERO);
 
+        BigDecimal orderTotal = BigDecimal.ZERO;
+
         for (ItemRequest whItem : request.items()) {
+
             OrderItem item = new OrderItem();
             item.setOrder(order);
             item.setProductId(whItem.productId());
             item.setQuantity(whItem.quantity());
             item.setSku(whItem.sku());
-            Optional<Product> optionalProduct = productRepository.findById(whItem.productId());
-            if (optionalProduct.isPresent()) {
-                Product product = optionalProduct.get();
-                BigDecimal securePriceFromShopDb = product.getPrice();
-                item.setPricePerUnit(securePriceFromShopDb);
-                BigDecimal subTotal = securePriceFromShopDb.multiply(BigDecimal.valueOf(whItem.quantity()));
-                item.setSubTotal(subTotal);
-                item.setProductName(product.getName());
-            }
+
+            Product product = productRepository.findById(whItem.productId())
+                    .orElseThrow(() -> new IllegalArgumentException("Product not found"));
+
+            BigDecimal price = product.getPrice();
+            item.setPricePerUnit(price);
+            item.setProductName(product.getName());
+
+            BigDecimal subTotal = price.multiply(BigDecimal.valueOf(whItem.quantity()));
+
+            item.setTaxRate(PricingPolicy.taxRate());
+            BigDecimal taxAmount = subTotal.multiply(item.getTaxRate());
+            BigDecimal totalPrice = subTotal.add(taxAmount);
+
+            item.setSubTotal(subTotal);
+            item.setTaxAmount(taxAmount);
+            item.setTotalPrice(totalPrice);
+
+            orderTotal = orderTotal.add(totalPrice);
+
             order.addItem(item);
         }
+
+        order.setTotalAmount(orderTotal);
+
         return order;
     }
-
 
 
     private OrderResponse toResponse(Order order, String url) {
@@ -92,7 +106,10 @@ public class OrderTransactionHelper {
                         item.getProductName(),
                         item.getQuantity(),
                         item.getPricePerUnit(),
-                        item.getSubTotal()
+                        item.getSubTotal(),
+                        item.getTaxRate(),
+                        item.getTaxAmount(),
+                        item.getTotalPrice()
                 ))
                 .toList();
 
