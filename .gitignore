@@ -11,5 +11,5 @@ TestResults/
 *.suo
 *.log
 .env
-.env
+.env.*
 !.env

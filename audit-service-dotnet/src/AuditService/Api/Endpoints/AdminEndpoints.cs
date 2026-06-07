@@ -113,8 +113,8 @@ public static class AdminEndpoints
     private static readonly ServiceHealthCheck[] ServiceChecks =
     [
         new("audit-service", "http://localhost:8080/health"),
-        new("shop-service", "http://shop-service:8080/health"),
-        new("billing-service", "http://billing-service:8080/health"),
+     new("shop-service", "http://shop-service:8087/health"),
+     new("billing-service", "http://billing-service:8089/health"),
         new("warehouse-service", "http://warehouse-service:8080/health"),
         new("invoice-service", "http://invoice-service:8080/health")
     ];

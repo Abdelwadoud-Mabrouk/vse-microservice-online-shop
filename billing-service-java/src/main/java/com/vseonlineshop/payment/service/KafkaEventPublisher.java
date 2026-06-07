@@ -97,7 +97,7 @@ public class KafkaEventPublisher {
                 payment.getCurrency(),
                 payment.getStatus()
         );
-        send(payment, auditEvents, "PAYMENT_INITIALIZED", payload);
+        send(payment, paymentTopic, "PAYMENT_INITIALIZED", payload);
     }
 
 
@@ -114,7 +114,6 @@ public class KafkaEventPublisher {
                 txn.getProviderTransactionId(),
                 txn.getRawResponse()
         );
-        send(payment, auditEvents, "PAYMENT_SUCCEEDED", payload);
         send(payment, paymentTopic, "PAYMENT_SUCCEEDED", payload);
     }
 
@@ -132,7 +131,6 @@ public class KafkaEventPublisher {
                 txn.getProviderTransactionId(),
                 txn.getRawResponse()
         );
-        send(payment, auditEvents, "PAYMENT_FAILED", payload);
         send(payment, paymentTopic, "PAYMENT_FAILED", payload);
     }
 
