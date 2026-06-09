@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.UUID;
 
 /**
  * Fire-and-forget Kafka Publisher.
@@ -30,14 +29,9 @@ public class KafkaEventPublisher {
     @Value("${kafka.topics.orders}")
     private String ordersTopic;
 
-    @Value("${kafka.topics.audit-events}")
-    private String auditTopic;
 
     @Value("${kafka.topics.alerts}")
     private String alertTopic;
-
-    @Value("${kafka.topics.invoice-events}")
-    private String invoiceTopic;
 
 
     public void publishOrderCreated(Order order) {
@@ -49,7 +43,7 @@ public class KafkaEventPublisher {
                 order.getCurrency(),
                 order.getPaymentMethod().name()
         );
-        send(auditTopic, order, "ORDER_CREATED", payload);
+        send(ordersTopic, order, "ORDER_CREATED", payload);
     }
 
     public void publishOrderCancelled(Order order, String reason) {
@@ -58,22 +52,10 @@ public class KafkaEventPublisher {
                 order.getUserId(),
                 reason
         );
-        send(auditTopic, order, "ORDER_CANCELLED", payload);
+        send(ordersTopic, order, "ORDER_CANCELLED", payload);
     }
 
     public void publishOrderCompleted(Order order) {
-        var payload = new OrderCompletedPayload(
-                order.getId(),
-                order.getUserId(),
-                order.getPaymentId(),
-                order.getTotalAmount(),
-                order.getCurrency(),
-                order.getPaymentMethod().name()
-        );
-        send(auditTopic, order, "ORDER_COMPLETED", payload);
-    }
-
-    public void publishInvoiceRequested(Order order) {
 
         var customer = new CustomerPayload(
                 "Mock User",
@@ -84,7 +66,7 @@ public class KafkaEventPublisher {
                 "DE"
         );
 
-        var payload = new InvoiceRequestedPayload(
+        var payload = new OrderCompletedPayload(
                 order.getId(),
                 order.getUserId(),
                 customer.email(),
@@ -99,16 +81,17 @@ public class KafkaEventPublisher {
                 order.getTotalAmount(),
                 order.getCurrency(),
                 order.getCorrelationId(),
-                customer
+                order.getPaymentId(),
+                customer,
+                order.getPaymentMethod().name()
         );
-
-        send(invoiceTopic, order, "INVOICE_REQUESTED", payload);
+        send(ordersTopic, order, "ORDER_COMPLETED", payload);
     }
 
-    public void publishReservationRollbackRequested(Order order, UUID reservationId) {
+    public void publishReservationRollbackRequested(Order order) {
         var payload = new ReservationRollbackPayload(
                 order.getId(),
-                reservationId
+                order.getReservationId()
         );
         send(ordersTopic, order, "RESERVATION_ROLLBACK_REQUESTED", payload);
     }
@@ -129,7 +112,7 @@ public class KafkaEventPublisher {
                 payload
         );
 
-        log.info("AUDIT TOPIC CONFIG = {}", auditTopic);
+        log.info("AUDIT TOPIC CONFIG = {}", topic);
         log.info("TARGET TOPIC = {}", topic);
         log.info("EVENT TYPE = {}, ORDER ID = {}", eventType, order != null ? order.getId() : null);
         log.info("EVENT PAYLOAD = {}", event);

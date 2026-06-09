@@ -8,5 +8,6 @@ import java.util.UUID;
 public record ReservationResponse(
     @JsonProperty("reservationId") UUID reservationId,
     @JsonProperty("order_id")      UUID orderId,
-    @JsonProperty("items")         List<ReservationResponseItem> items
+    @JsonProperty("items")         List<ReservationResponseItem> items,
+    String status
 ) {}

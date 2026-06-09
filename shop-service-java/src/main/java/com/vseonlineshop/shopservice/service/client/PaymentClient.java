@@ -67,6 +67,8 @@ public class PaymentClient {
         } catch (RestClientException ex) {
             log.error("[CRITICAL] Payment-Service ist DOWN für Order={}: {}", order.getId(), ex.getMessage());
             throw ex;
+        }catch (RuntimeException ex) {
+            throw new RuntimeException(ex);
         }
     }
 }

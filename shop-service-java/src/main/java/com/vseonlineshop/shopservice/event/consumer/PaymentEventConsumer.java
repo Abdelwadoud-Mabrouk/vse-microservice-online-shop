@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderStatus;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationResponse;
 import com.vseonlineshop.shopservice.event.dtos.DomainEvent;
 import com.vseonlineshop.shopservice.event.dtos.payment.PaymentFailedPayload;
 import com.vseonlineshop.shopservice.event.dtos.payment.PaymentSucceededPayload;
@@ -97,7 +98,6 @@ public class PaymentEventConsumer {
 
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCompleted(finalOrder));
-            safePublish(() -> kafkaEventPublisher.publishInvoiceRequested(finalOrder));
 
 
         } catch (Exception ex) {
@@ -148,6 +148,23 @@ public class PaymentEventConsumer {
 
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCancelled(finalOrder, payload.failureReason()));
+
+            // Reales Reservations
+
+            log.info(
+                    "[OrderService] Triggering warehouse reservation rollback. reservationId={}, orderId={}",
+                    order.getReservationId(),
+                    order.getId());
+
+            safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(finalOrder));
+
+            ReservationResponse response = warehouseClient.cancelReservation(order);
+
+            log.info(
+                    "[WarehouseClient] Reservation cancelled successfully. reservationId={}, orderId={}, status={}",
+                    response.reservationId(),
+                    response.orderId(),
+                    response.status());
 
         } catch (Exception ex) {
             log.error("[Kafka-Consumer ERROR] Fehler beim Verarbeiten des Zahlungs-Events: {}", ex.getMessage(), ex);

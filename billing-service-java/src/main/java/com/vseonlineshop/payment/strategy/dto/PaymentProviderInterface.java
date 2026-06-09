@@ -1,3 +1,4 @@
+/*
 package com.vseonlineshop.payment.strategy.dto;
 
 
@@ -11,4 +12,4 @@ public interface PaymentProviderInterface {
     boolean supports(PaymentMethod method);
 
     SmallProviderResponse send(PaymentRequest request, UUID paymentId);
-}
+}*/

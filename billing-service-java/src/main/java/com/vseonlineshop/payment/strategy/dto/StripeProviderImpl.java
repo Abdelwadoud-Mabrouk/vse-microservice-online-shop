@@ -1,3 +1,4 @@
+/*
 package com.vseonlineshop.payment.strategy.dto;
 
 
@@ -114,4 +115,4 @@ public class StripeProviderImpl implements PaymentProviderInterface {
             }
         }
     }
-}
+}*/

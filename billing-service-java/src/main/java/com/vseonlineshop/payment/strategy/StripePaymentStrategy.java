@@ -8,7 +8,6 @@ import com.vseonlineshop.payment.dto.*;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -33,7 +32,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
     @Override
     public boolean supports(PaymentMethod method) {
 
-        return method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.KLARNA || method == PaymentMethod.GIROPAY
+        return method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.KLARNA
                 || method == PaymentMethod.APPLE_PAY || method == PaymentMethod.GOOGLE_PAY;
     }
 
@@ -110,7 +109,6 @@ public class StripePaymentStrategy implements PaymentStrategy {
         switch (method) {
             case KLARNA -> builder.addPaymentMethodType(SessionCreateParams.PaymentMethodType.KLARNA);
             case CREDIT_CARD -> builder.addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD);
-            case GIROPAY -> builder.addPaymentMethodType(SessionCreateParams.PaymentMethodType.GIROPAY);
             default -> {
             }
         }
