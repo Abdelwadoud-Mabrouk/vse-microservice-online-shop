@@ -51,13 +51,6 @@ public class OrderApplicationService {
         try {
             order = orderTransactionHelper.createInitialOrder(request);
             log.info("[OrderService] Order {} angelegt (correlationId={})", order.getId(), order.getCorrelationId());
-            var future = kafkaTemplate.send(
-                    "topic",
-                    order.getId().toString(),
-                    "event"
-            );
-
-            future.get();
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
         } catch (Exception ex) {
@@ -95,7 +88,7 @@ public class OrderApplicationService {
                 payment = paymentClient.pay(order);
             } catch (RestClientException ex) {
                 log.error("[PAYMENT ERROR] Payment-Service unreachable for Order {}", order.getId(), ex);
-                cancelOrder(order, reservation.orderId(), "PAYMENT_SERVICE_UNAVAILABLE", ex);
+                cancelOrder(order, reservation.reservationId(), "PAYMENT_SERVICE_UNAVAILABLE", ex);
                 throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice offline.");
             }
 
@@ -186,8 +179,30 @@ public class OrderApplicationService {
             safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
 
             if (reservationOrderId != null) {
-                log.info("[OrderService] Trigger Rollback für Warehouse Reservation: {}", reservationOrderId);
-                safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(order, reservationOrderId));
+                log.info(
+                        "[OrderService] Triggering warehouse reservation rollback. reservationId={}, orderId={}",
+                        reservationOrderId,
+                        order.getId());
+
+                safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(order));
+
+                try {
+                    ReservationResponse response = warehouseClient.cancelReservation(order);
+
+                    log.info(
+                            "[WarehouseClient] Reservation cancelled successfully. reservationId={}, orderId={}, status={}",
+                            response.reservationId(),
+                            response.orderId(),
+                            response.status());
+
+                } catch (Exception ex) {
+                    log.error(
+                            "[WarehouseClient] Failed to cancel reservation. reservationId={}, orderId={}, correlationId={}",
+                            reservationOrderId,
+                            order.getId(),
+                            order.getCorrelationId(),
+                            ex);
+                }
             }
         }
         Map<String, String> metadata = Map.of(

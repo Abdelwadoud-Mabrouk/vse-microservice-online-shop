@@ -11,16 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/**
- * Mock-Implementation des Warehouse-Clients.
- *
- * Echte Implementierung: RestTemplate / WebClient auf ${warehouse.base-url}/reservations
- * Mock gibt die Beispiel-Response zurück und leitet productName + unitPrice
- * aus einer statischen Produktdatenbank ab.
- *
- * Ersetze die mock*-Methoden gegen einen echten HTTP-Call, sobald
- * das Warehouse-Service deployed ist.
- */
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -56,6 +47,40 @@ public class WarehouseClient {
                 order.getReservationId());
     }
 
+    public ReservationResponse cancelReservation(Order order) {
+        return delete(
+                order,
+                order.getReservationId()
+        );
+    }
+
+    private <T> T delete(Order order,
+                         Object... uriVars) {
+
+        log.info("[WarehouseClient] DELETE {} for order={}", "/reservations/{id}", order.getId());
+
+        try {
+            return restClient.delete()
+                    .uri("/reservations/{id}", uriVars)
+                    .header("X-Correlation-Id", order.getCorrelationId().toString())
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new RuntimeException(
+                                "Warehouse call failed: HTTP " + res.getStatusCode()
+                        );
+                    })
+                    .body((Class<T>) ReservationResponse.class);
+
+        } catch (RestClientException ex) {
+            log.error(
+                    "[CRITICAL] Warehouse-Service DOWN while cancelling reservation for order={}",
+                    order.getId(),
+                    ex
+            );
+            throw ex;
+        }
+    }
+
 
     private <T> T post(String uri,
                        Order order,
@@ -85,7 +110,6 @@ public class WarehouseClient {
             throw ex;
         }
     }
-
 
     private ReservationRequest buildRequest(Order order) {
         List<ReservationRequestItem> items = order.getItems().stream()
