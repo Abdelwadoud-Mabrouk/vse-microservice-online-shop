@@ -26,7 +26,6 @@ public class StripeWebhookController {
 
         Event event;
 
-
         try {
             event = webhookVerifier.verifyStripe(payload, sigHeader);
         } catch (IllegalArgumentException e) {

@@ -94,7 +94,7 @@ public class OrderApplicationService {
 
             // Fall 1: Sofortiger Zahlungsfehler vom Provider
             if ("FAILED".equalsIgnoreCase(String.valueOf(payment.status()))) {
-                cancelOrder(order, reservation.orderId(), "PAYMENT_FAILED", null);
+                cancelOrder(order, reservation.reservationId(), "PAYMENT_FAILED", null);
                 throw new PaymentServiceException("Zahlung fehlgeschlagen.");
             }
 
