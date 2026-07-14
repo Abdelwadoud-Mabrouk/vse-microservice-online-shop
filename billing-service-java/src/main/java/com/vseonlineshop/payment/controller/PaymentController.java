@@ -9,19 +9,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/payments")
 @RequiredArgsConstructor
 public class PaymentController {
 
     private final PaymentService paymentService;
 
-    /**
-     * POST /payments
-     * Nimmt Payment-Request entgegen, legt Payment als PENDING an,
-     * startet Async-Verarbeitung → gibt sofort 202 zurück.
-     */
-
-    @PostMapping
+    @PostMapping("/pay")
     public ResponseEntity<PaymentResponse> createPayment(
             @Valid @RequestBody PaymentRequest request) {
 

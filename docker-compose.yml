@@ -238,7 +238,7 @@ services:
       context: ./billing-service-java
     container_name: billing-service
     ports:
-      - "8091:8089"
+      - "8089:8089"
     environment:
       SPRING_PROFILES_ACTIVE: dev
 
@@ -251,6 +251,7 @@ services:
 
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID}
 
     depends_on:
       billing-db:
@@ -265,7 +266,7 @@ services:
       command:
         - listen
         - --forward-to
-        - http://billing-service:8089/webhook
+        - http://billing-service:8089/api/v1/billing/webhook/stripe
       volumes:
         - ~/.config/stripe:/root/.config/stripe
       depends_on:

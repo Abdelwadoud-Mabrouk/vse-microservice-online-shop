@@ -1,4 +1,4 @@
-package com.vseonlineshop.payment.webhook;
+package com.vseonlineshop.payment.webhook.stripe;
 
 import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
@@ -8,10 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/**
- * Prüft ob Webhook wirklich vom Provider kommt (nicht gefälscht).
- * Jeder Provider hat eigenes Signatur-Verfahren.
- */
+
 @Slf4j
 @Component
 public class WebhookVerifier {

@@ -53,7 +53,7 @@ public class PaymentClient {
 
         try {
             return restClient.post()
-                    .uri("/payments")
+                    .uri("/pay")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
