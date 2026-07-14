@@ -16,11 +16,6 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 
-/**
- * Fire-and-forget Kafka Publisher.
- * Fehler werden geloggt aber NICHT propagiert – der Geschäftsfluss
- * darf durch einen Kafka-Ausfall nicht blockiert werden.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

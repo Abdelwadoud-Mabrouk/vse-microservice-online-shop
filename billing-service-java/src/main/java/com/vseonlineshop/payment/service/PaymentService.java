@@ -74,7 +74,6 @@ public class PaymentService {
         try {
             SmallProviderResponse providerResponse = paymentFacade.execute(request,payment.getPaymentId());
 
-            // Speichern in deiner DB (mit den Daten aus dem ProviderResponse)
             saveTransaction(
                     payment,
                     providerResponse.providerTransactionId(),
