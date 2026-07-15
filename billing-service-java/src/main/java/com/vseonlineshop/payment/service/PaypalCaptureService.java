@@ -39,7 +39,7 @@ public class PaypalCaptureService {
             log.info("[PAYPAL/CAPTURE] Antwort erhalten. Status: {}", capturedOrder.getStatus());
 
             if ("COMPLETED".equalsIgnoreCase(capturedOrder.getStatus().toString())) {
-                log.info("[PAYPAL/SUCCESS] Geld eingezogen! Webhook wird jede Sekunde gefeuert...");
+                log.info("[PAYPAL/SUCCESS] Geld eingezogen! Webhook wird  gefeuert...");
                 return "Zahlung erfolgreich gecaptured!";
             } else {
                 publishSystemAlert(orderId);

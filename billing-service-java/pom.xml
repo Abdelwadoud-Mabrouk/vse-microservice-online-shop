@@ -9,10 +9,10 @@
         <relativePath/>
     </parent>
     <groupId>com.vse-online-shop</groupId>
-    <artifactId>payment-service-java</artifactId>
+    <artifactId>billing-service-java</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>payment-service</name>
-    <description>payment-service</description>
+    <name>billing-service</name>
+    <description>billing-service</description>
     <url/>
     <licenses>
         <license/>

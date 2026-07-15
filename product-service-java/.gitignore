@@ -1,0 +1,15 @@
+.Rhistory
+docs/.Rhistory
+.DS_Store
+bin/
+obj/
+target/
+.vs/
+.vscode/
+TestResults/
+*.user
+*.suo
+*.log
+.env
+.env.*
+!.env
