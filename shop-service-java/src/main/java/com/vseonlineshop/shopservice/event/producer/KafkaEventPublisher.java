@@ -3,6 +3,7 @@ package com.vseonlineshop.shopservice.event.producer;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderItem;
+import com.vseonlineshop.shopservice.dto.payment.RefundResponseDto;
 import com.vseonlineshop.shopservice.event.dtos.*;
 import com.vseonlineshop.shopservice.event.dtos.order.*;
 import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
@@ -52,7 +53,7 @@ public class KafkaEventPublisher {
                 order.getUserId(),
                 reason
         );
-        send(ordersTopic, order, "ORDER_CANCELLED", payload);
+        send(ordersTopic, order, "ORDER_" + order.getStatus(), payload);
     }
 
     public void publishOrderCompleted(Order order) {
@@ -86,6 +87,31 @@ public class KafkaEventPublisher {
                 order.getPaymentMethod().name()
         );
         send(ordersTopic, order, "ORDER_COMPLETED", payload);
+    }
+
+    public void publishOrderRollbackCompleted(Order order, RefundResponseDto refundResponse, String reason) {
+        var payload = new OrderRollbackCompletedPayload(
+                order.getId(),
+                order.getUserId(),
+                order.getTotalAmount(),
+                order.getCurrency(),
+                order.getCorrelationId(),
+                order.getPaymentId(),
+                refundResponse.providerRefundTransactionId(),
+                reason
+
+        );
+
+        send(ordersTopic, order, "ORDER_ROLLBACK_COMPLETED", payload);
+    }
+
+    public void publishWarehouseDispatchFailed(Order order, String reason) {
+        var payload = new WarehouseDispatchFailedPayload(
+                order.getId(),
+                order.getCorrelationId(),
+                reason
+        );
+        send(ordersTopic, order, "WAREHOUSE_DISPATCH_FAILED", payload);
     }
 
     public void publishReservationRollbackRequested(Order order) {

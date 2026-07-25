@@ -48,6 +48,12 @@ public class Order {
     @Column(nullable = false)
     private String currency = "EUR";
 
+    @Embedded
+    private CustomerInformation customer;
+
+    @Embedded
+    private ShippingAddress shippingAddress;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

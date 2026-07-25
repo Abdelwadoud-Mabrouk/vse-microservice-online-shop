@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.dto.shop;
+package com.vseonlineshop.shopservice.dto.order.request;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;

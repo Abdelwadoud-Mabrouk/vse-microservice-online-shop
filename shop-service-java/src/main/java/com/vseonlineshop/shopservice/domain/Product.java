@@ -2,13 +2,17 @@ package com.vseonlineshop.shopservice.domain;
 
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
-@Table(name = "products")
-@Data
+@Table(name = "order_products")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Product {
 
     @Id
@@ -19,8 +23,6 @@ public class Product {
 
     @Column(nullable = false)
     private String name;
-
-    private String category;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;

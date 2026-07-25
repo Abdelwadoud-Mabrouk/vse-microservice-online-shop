@@ -7,5 +7,5 @@ public record CartItemDTO(
         String productName,
         long quantity,
          UUID productId,
-        BigDecimal pricePerUnit) {
+        BigDecimal totalPrice) {
 }

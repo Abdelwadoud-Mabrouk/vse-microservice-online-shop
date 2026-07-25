@@ -1,11 +1,12 @@
 package com.vseonlineshop.shopservice.service.shop;
 
 import com.vseonlineshop.shopservice.domain.*;
+import com.vseonlineshop.shopservice.dto.order.request.CustomerInformationRequest;
+import com.vseonlineshop.shopservice.dto.order.request.ItemRequest;
+import com.vseonlineshop.shopservice.dto.order.request.OrderRequest;
+import com.vseonlineshop.shopservice.dto.order.request.ShippingAddressRequest;
+import com.vseonlineshop.shopservice.dto.order.response.CheckoutResponse;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
-import com.vseonlineshop.shopservice.dto.shop.ItemRequest;
-import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
-import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
-import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import com.vseonlineshop.shopservice.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -42,7 +42,7 @@ public class OrderTransactionHelper {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public OrderResponse updateToAwaitingPayment(UUID orderId, PaymentResponse payment) {
+    public CheckoutResponse updateToAwaitingPayment(UUID orderId, PaymentResponse payment) {
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.setStatus(OrderStatus.AWAITING_PAYMENT);
         order.setPaymentId(payment.paymentId().toString());
@@ -51,15 +51,42 @@ public class OrderTransactionHelper {
         return toResponse(order, payment.approvalUrl());
     }
 
+    private CustomerInformation toCustomer(CustomerInformationRequest request) {
+
+        CustomerInformation customer = new CustomerInformation();
+
+        customer.setFirstName(request.firstName());
+        customer.setLastName(request.lastName());
+        customer.setEmail(request.email());
+        customer.setPhone(request.phone());
+
+        return customer;
+    }
+
+    private ShippingAddress toShippingAddress(ShippingAddressRequest request) {
+
+        ShippingAddress address = new ShippingAddress();
+
+        address.setStreet(request.street());
+        address.setHouseNumber(request.houseNumber());
+        address.setPostalCode(request.postalCode());
+        address.setCity(request.city());
+        address.setCountry(request.country());
+
+        return address;
+    }
+
     private Order buildInitialOrder(OrderRequest request, UUID correlationId) {
 
         Order order = new Order();
         order.setCorrelationId(correlationId);
-        order.setUserId(request.userId());
         order.setCurrency(request.currency());
         order.setPaymentMethod(request.paymentMethod());
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(BigDecimal.ZERO);
+
+        order.setCustomer(toCustomer(request.customer()));
+        order.setShippingAddress(toShippingAddress(request.shippingAddress()));
 
         BigDecimal orderTotal = BigDecimal.ZERO;
 
@@ -99,32 +126,13 @@ public class OrderTransactionHelper {
     }
 
 
-    private OrderResponse toResponse(Order order, String url) {
-        List<OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getProductName(),
-                        item.getQuantity(),
-                        item.getPricePerUnit(),
-                        item.getSubTotal(),
-                        item.getTaxRate(),
-                        item.getTaxAmount(),
-                        item.getTotalPrice()
-                ))
-                .toList();
-
-        return new OrderResponse(
+    private CheckoutResponse toResponse(Order order, String approvalUrl) {
+        return new CheckoutResponse(
                 order.getId(),
-                order.getUserId(),
-                order.getPaymentId(),
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCurrency(),
-                order.getPaymentMethod(),
-                itemResponses,
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                url
+                approvalUrl
         );
     }
 }

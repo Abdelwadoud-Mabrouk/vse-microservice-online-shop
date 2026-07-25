@@ -34,28 +34,24 @@ public class DatabaseSeeder implements CommandLineRunner {
             bed.setId(UUID.fromString("55555555-5555-4555-8555-555555555555"));
             bed.setSku("SKU-BED-LINA");
             bed.setName("Doppelbett Lina 180x200");
-            bed.setCategory("Betten");
             bed.setPrice(new BigDecimal("599.99"));
 
             Product desk = new Product();
             desk.setId(UUID.fromString("22222222-2222-4222-8222-222222222222"));
             desk.setSku("SKU-DESK-OSLO");
             desk.setName("Schreibtisch Oslo");
-            desk.setCategory("Tische");
             desk.setPrice(new BigDecimal("149.50"));
 
             Product lamp = new Product();
             lamp.setId(UUID.fromString("33333333-3333-4333-8333-333333333333"));
             lamp.setSku("SKU-LAMP-LUNA");
             lamp.setName("Stehlampe Luna");
-            lamp.setCategory("Lampen");
             lamp.setPrice(new BigDecimal("79.95"));
 
             Product product = new Product();
             product.setId(UUID.fromString("11111111-1111-4111-8111-111111111111"));
             product.setSku("SKU-CHAIR-OAK");
             product.setName("test");
-            product.setCategory("test");
             product.setPrice(new BigDecimal("79.95"));
 
             productRepository.saveAll(List.of(bed, desk, lamp, product));

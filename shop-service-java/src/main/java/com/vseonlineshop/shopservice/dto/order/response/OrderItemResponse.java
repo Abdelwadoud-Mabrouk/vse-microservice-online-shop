@@ -1,4 +1,4 @@
-package com.vseonlineshop.shopservice.dto.shop;
+package com.vseonlineshop.shopservice.dto.order.response;
 
 
 import java.math.BigDecimal;
