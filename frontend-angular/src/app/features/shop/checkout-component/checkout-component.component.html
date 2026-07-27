@@ -1,0 +1,148 @@
+<section class="checkout">
+
+    <h1>Checkout</h1>
+
+    <!-- Lieferadresse -->
+
+    <section class="checkout-card">
+
+        <h2>Lieferadresse</h2>
+
+        <div class="form-grid">
+
+            <input
+                    type="text"
+                    placeholder="Vorname"
+                    [(ngModel)]="shipping.firstName">
+
+            <input
+                    type="text"
+                    placeholder="Nachname"
+                    [(ngModel)]="shipping.lastName">
+
+            <input
+                    type="email"
+                    placeholder="E-Mail"
+                    [(ngModel)]="shipping.email">
+
+            <input
+                    type="text"
+                    placeholder="Telefon"
+                    [(ngModel)]="shipping.phone">
+
+            <input
+                    type="text"
+                    placeholder="Straße"
+                    [(ngModel)]="shipping.street">
+
+            <input
+                    type="text"
+                    placeholder="Hausnummer"
+                    [(ngModel)]="shipping.houseNumber">
+
+            <input
+                    type="text"
+                    placeholder="PLZ"
+                    [(ngModel)]="shipping.postalCode">
+
+            <input
+                    type="text"
+                    placeholder="Stadt"
+                    [(ngModel)]="shipping.city">
+
+            <input
+                    type="text"
+                    placeholder="Land"
+                    [(ngModel)]="shipping.country">
+
+        </div>
+
+    </section>
+
+
+    <!-- Zahlung -->
+
+    <section class="checkout-card">
+
+        <h2>Zahlungsmethode</h2>
+
+        <select [(ngModel)]="paymentMethod">
+
+            <option [value]="PaymentMethod.PAYPAL">
+                PayPal
+            </option>
+
+            <option [value]="PaymentMethod.CREDIT_CARD">
+                Kreditkarte
+            </option>
+
+            <option [value]="PaymentMethod.KLARNA">
+                Klarna
+            </option>
+
+            <option [value]="PaymentMethod.APPLE_PAY">
+                Apple Pay
+            </option>
+
+            <option [value]="PaymentMethod.GOOGLE_PAY">
+                Google Pay
+            </option>
+
+        </select>
+
+    </section>
+
+
+    <!-- Übersicht -->
+
+    <section class="checkout-card">
+
+        <h2>Bestellübersicht</h2>
+
+        <p>
+
+            Artikel
+
+            <strong>
+
+                {{ cart.count() }}
+
+            </strong>
+
+        </p>
+
+        <p>
+
+            Gesamt
+
+            <strong>
+
+                {{ cart.total() | currency:'EUR' }}
+
+            </strong>
+
+        </p>
+
+    </section>
+
+
+    @if(error()){
+
+        <div class="error">
+
+            {{ error() }}
+
+        </div>
+
+    }
+
+    <button
+            class="pay-button"
+            (click)="placeOrder()"
+            [disabled]="loading() || cart.count()===0">
+
+        {{ loading() ? 'Bestellung wird erstellt...' : 'Jetzt bezahlen' }}
+
+    </button>
+
+</section>

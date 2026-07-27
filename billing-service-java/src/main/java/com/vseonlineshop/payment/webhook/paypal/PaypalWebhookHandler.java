@@ -3,11 +3,11 @@ package com.vseonlineshop.payment.webhook.paypal;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vseonlineshop.payment.dto.WebHookMetadata;
+import com.vseonlineshop.payment.dto.webhook.WebHookMetadata;
 import com.vseonlineshop.payment.entity.Payment;
-import com.vseonlineshop.payment.enums.PaymentStatus;
+import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.exception.GlobalException;
-import com.vseonlineshop.payment.service.KafkaEventPublisher;
+import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
 import com.vseonlineshop.payment.webhook.HelpTool;
 import com.vseonlineshop.payment.webhook.WebhookHandler;
 import com.vseonlineshop.payment.webhook.exception.WebhookProcessingException;
@@ -110,7 +110,6 @@ public class PaypalWebhookHandler implements WebhookHandler {
                 throw new WebhookProcessingException("Fehler beim JSON der Verifizierung");
             }
 
-            // PayPal-Order-ID extrahieren (Aus den related_ids im JSON)
             String checkoutSessionId = "UNKNOWN";
             if (resource.has("supplementary_data") &&
                     resource.get("supplementary_data").has("related_ids") &&
@@ -118,6 +117,10 @@ public class PaypalWebhookHandler implements WebhookHandler {
                 checkoutSessionId = resource.get("supplementary_data").get("related_ids").get("order_id").asText();
             }
 
+
+            String captureId = resource.has("id") ? resource.get("id").asText() : checkoutSessionId;
+
+            log.info("[PAYPAL/WEBHOOK] Empfangene IDs -> Order-ID: {}, Capture-ID: {}", checkoutSessionId, captureId);
             // Die verkettete custom_id aus dem JSON holen und in einheitliches Metadata-Objekt mappen
             String customIdRaw = resource.has("custom_id") ? resource.get("custom_id").asText() : "";
             WebHookMetadata metadata = helpTool.getMetadata(customIdRaw, eventType, checkoutSessionId);
@@ -138,7 +141,7 @@ public class PaypalWebhookHandler implements WebhookHandler {
             // Routing des Event-Typs
             switch (eventType) {
                 case "PAYMENT.CAPTURE.COMPLETED" ->
-                        helpTool.handleSuccess(payment, checkoutSessionId, payload, Instant.now());
+                        helpTool.handleSuccess(payment, checkoutSessionId,captureId, payload, Instant.now());
                 case "PAYMENT.CAPTURE.DENIED" -> {
                     String dynamischerFehlergrund = "PayPal-Zahlung abgelehnt";
                     if (resource.has("status_details") && resource.get("status_details").has("reason")) {
@@ -146,7 +149,7 @@ public class PaypalWebhookHandler implements WebhookHandler {
                     }
                     helpTool.handleFailure(payment, checkoutSessionId, dynamischerFehlergrund, payload, Instant.now());
                 }
-                default -> helpTool.handleInformativeEvent(payment, checkoutSessionId, eventType, payload);
+                default -> helpTool.handleInformativeEvent(payment, checkoutSessionId,null, eventType, payload);
             }
 
 

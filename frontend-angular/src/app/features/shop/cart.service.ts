@@ -13,11 +13,11 @@ export class CartService {
 
   add(product: Product): void {
     const current = this.itemsSignal();
-    const existing = current.find((item) => item.product.productId === product.productId);
+    const existing = current.find((item) => item.product.id === product.id);
     if (existing) {
       this.itemsSignal.set(
         current.map((item) =>
-          item.product.productId === product.productId ? { ...item, quantity: item.quantity + 1 } : item
+          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
       return;
@@ -33,12 +33,12 @@ export class CartService {
     }
 
     this.itemsSignal.set(
-      this.itemsSignal().map((item) => (item.product.productId === productId ? { ...item, quantity } : item))
+      this.itemsSignal().map((item) => (item.product.id === productId ? { ...item, quantity } : item))
     );
   }
 
   remove(productId: string): void {
-    this.itemsSignal.set(this.itemsSignal().filter((item) => item.product.productId !== productId));
+    this.itemsSignal.set(this.itemsSignal().filter((item) => item.product.id !== productId));
   }
 
   clear(): void {

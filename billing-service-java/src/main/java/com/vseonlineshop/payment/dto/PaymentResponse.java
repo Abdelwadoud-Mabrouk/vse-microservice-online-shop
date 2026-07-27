@@ -1,6 +1,6 @@
 package com.vseonlineshop.payment.dto;
 
-import com.vseonlineshop.payment.enums.PaymentStatus;
+import com.vseonlineshop.payment.entity.PaymentStatus;
 import lombok.Builder;
 
 import java.time.Instant;

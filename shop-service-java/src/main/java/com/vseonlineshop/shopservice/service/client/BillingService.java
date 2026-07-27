@@ -37,7 +37,6 @@ public class BillingService {
 
         PaymentRequest request =
                 new PaymentRequest(
-                        fullOrder.getCorrelationId(),
                         fullOrder.getId(),
                         fullOrder.getUserId(),
                         fullOrder.getTotalAmount(),
@@ -57,6 +56,7 @@ public class BillingService {
 
 
         return paymentGateway.pay(
+                order.getCorrelationId(),
                 request,
                 order.getId()
         );
@@ -67,16 +67,13 @@ public class BillingService {
     public RefundResponseDto refund(Order order) {
         log.info("[BillingService] Starte Refund-Kompensation für Order={}", order.getId());
 
-        // 1. DTO für den Billing-Service zusammenstellen
         RefundRequestDto request = new RefundRequestDto(
-                order.getCorrelationId(),
                 order.getPaymentMethod(),
                 order.getTotalAmount(),
                 order.getCurrency()
         );
 
-        // 2. Über Gateway an den Billing Service schicken
-        return paymentGateway.refund(request, order.getId());
+        return paymentGateway.refund(order.getCorrelationId(), request, order.getId());
     }
 
     public Map<String, String> capturePaypal(String token) {

@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
-public class OrderItem {
+public class CartItemDTO {
 
     private Long id;
 
@@ -17,7 +17,5 @@ public class OrderItem {
 
     private Integer quantity;
 
-    private BigDecimal pricePerUnit;
-
-    private BigDecimal subTotal;
+    private BigDecimal totalPrice;
 }

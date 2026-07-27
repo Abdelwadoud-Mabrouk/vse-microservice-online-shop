@@ -1,4 +1,4 @@
-package com.vseonlineshop.payment.event;
+package com.vseonlineshop.payment.kafka.event;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 

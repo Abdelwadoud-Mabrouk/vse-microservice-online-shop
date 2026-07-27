@@ -16,14 +16,14 @@ import { StatusChipComponent } from '../../shared/components/status-chip.compone
         <div class="detail-head">
           <div>
             <span class="eyebrow">Correlation</span>
-            <h3>{{ order.correlationId }}</h3>
+            <h3>{{ order.id }}</h3>
           </div>
           <app-status-chip [label]="order.status" />
         </div>
         <div class="table">
           @for (item of order.items; track item.productId) {
             <div class="table-row">
-              <span>{{ item.productName ?? item.sku }}</span>
+              <span>{{ item.productName ?? item.productName }}</span>
               <span>{{ item.quantity }}</span>
               <span>{{ item.totalPrice ?? 0 | currency: 'EUR' }}</span>
             </div>

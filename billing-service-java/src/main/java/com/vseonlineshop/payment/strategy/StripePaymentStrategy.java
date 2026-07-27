@@ -2,14 +2,18 @@ package com.vseonlineshop.payment.strategy;
 
 import com.stripe.StripeClient;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
+import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.vseonlineshop.payment.dto.*;
+import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Slf4j
@@ -38,19 +42,18 @@ public class StripePaymentStrategy implements PaymentStrategy {
 
 
     @Override
-    public SmallProviderResponse send(PaymentRequest orderRequest, UUID paymentId) {
+    public SmallProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
         log.info("[STRIPE/START] Initialisiere Checkout-Session für Order-ID={} via {}",
                 orderRequest.orderId(), orderRequest.paymentMethod());
 
         try {
             SessionCreateParams.Builder sessionBuilder = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
-                   // .setSuccessUrl("http://127.0.0.1:5500/success.html")
                     .setSuccessUrl(successPageUrl)
                     .setPaymentIntentData(
                             SessionCreateParams.PaymentIntentData.builder()
-                                    .putMetadata("paymentId",     paymentId.toString())
-                                    .putMetadata("orderId",       orderRequest.orderId().toString())
+                                    .putMetadata("paymentId", paymentId.toString())
+                                    .putMetadata("orderId", orderRequest.orderId().toString())
                                     .putMetadata("correlationId", orderRequest.correlationId().toString())
                                     .build()
                     );
@@ -60,13 +63,15 @@ public class StripePaymentStrategy implements PaymentStrategy {
             long totalAmountInCent = 0L;
             String selectedCurrency = orderRequest.currency().toLowerCase();
 
-            for (OrderItem item : orderRequest.cartItems()) {
-                long unitAmountInCent = item.getPricePerUnit()
-                        .multiply(new java.math.BigDecimal(100))
+            for (CartItemDTO item : orderRequest.cartItems()) {
+                long lineTotalInCent = item.getTotalPrice()
+                        .multiply(BigDecimal.valueOf(100))
                         .longValue();
 
+                long unitAmountInCent = lineTotalInCent / item.getQuantity();
+
                 sessionBuilder.addLineItem(SessionCreateParams.LineItem.builder()
-                        .setQuantity((long) item.getQuantity())
+                        .setQuantity(Long.valueOf(item.getQuantity()))
                         .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
                                 .setCurrency(selectedCurrency)
                                 .setUnitAmount(unitAmountInCent)
@@ -76,7 +81,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
                                 .build())
                         .build());
 
-                totalAmountInCent += unitAmountInCent * item.getQuantity();
+                totalAmountInCent += lineTotalInCent;
             }
 
             log.info("[STRIPE/PROCESS] Parameter kontrolliert: Order-ID={}, Währung={}, Gesamtsumme(Cent)={}",
@@ -102,6 +107,72 @@ public class StripePaymentStrategy implements PaymentStrategy {
                     orderRequest.orderId(), e.getMessage(), e);
             throw new PaymentServiceException("Zahlung über Stripe fehlgeschlagen");
         }
+    }
+
+    @Override
+    public String refund(String transactionId, BigDecimal amount, String currency) {
+        log.info("[STRIPE/REFUND] Starte Refund für Transaktion={} mit Betrag={} {}",
+                transactionId, amount, currency);
+
+        try {
+            long amountInCent = amount.multiply(new BigDecimal(100)).longValue();
+
+            RefundCreateParams.Builder refundBuilder = RefundCreateParams.builder()
+                    .setAmount(amountInCent);
+
+            if (transactionId.startsWith("cs_")) {
+                Session session = stripeClient.v1().checkout().sessions().retrieve(transactionId);
+                refundBuilder.setPaymentIntent(session.getPaymentIntent());
+            } else {
+                // Direkte PaymentIntent-ID
+                refundBuilder.setPaymentIntent(transactionId);
+            }
+
+            RefundCreateParams params = refundBuilder.build();
+
+            // Refund über das Stripe V1 SDK ausführen
+            Refund refund = stripeClient.v1().refunds().create(params);
+
+            log.info("[STRIPE/REFUND_SUCCESS] Refund erfolgreich ausgeführt. Stripe-Refund-ID={}, Status={}",
+                    refund.getId(), refund.getStatus());
+
+            return refund.getId();
+
+        } catch (StripeException e) {
+            log.error("[STRIPE/REFUND_ERROR] Fehler beim Stripe-Refund für Transaktion={}. Grund: {}",
+                    transactionId, e.getMessage(), e);
+            throw new PaymentServiceException("Rückerstattung über Stripe fehlgeschlagen: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public String getStatus(String providerTransactionId) {
+        try {
+            Session session = stripeClient.v1()
+                    .checkout()
+                    .sessions()
+                    .retrieve(providerTransactionId);
+
+            return session.getPaymentStatus();
+        } catch (StripeException e) {
+            log.error("[STRIPE] Live-Status konnte nicht von Stripe abgerufen werden für ID={}",
+                    providerTransactionId, e);
+            return "UNKNOWN";
+        }
+    }
+
+    @Override
+    public boolean supportsTransactionId(String transactionId) {
+        return transactionId != null && (
+                transactionId.startsWith("cs_") ||
+                        transactionId.startsWith("pi_") ||
+                        transactionId.startsWith("ch_")
+        );
+    }
+
+    @Override
+    public String getProviderName() {
+        return "STRIPE";
     }
 
     private void mapPaymentMethod(SessionCreateParams.Builder builder, PaymentMethod method) {

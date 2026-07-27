@@ -45,7 +45,6 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now()
         );
 
-        // ✅ ex.getHttpStatus() nutzen anstelle von ex.hashCode()!
         return ResponseEntity.status(ex.getHttpStatus()).body(errorBody);
     }
 

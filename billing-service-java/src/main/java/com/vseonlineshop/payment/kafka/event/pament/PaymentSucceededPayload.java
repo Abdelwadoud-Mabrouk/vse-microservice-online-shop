@@ -1,8 +1,8 @@
-package com.vseonlineshop.payment.event.payment;
+package com.vseonlineshop.payment.kafka.event.pament;
 
 
 
-import com.vseonlineshop.payment.dto.PaymentMethod;
+import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.util.UUID;

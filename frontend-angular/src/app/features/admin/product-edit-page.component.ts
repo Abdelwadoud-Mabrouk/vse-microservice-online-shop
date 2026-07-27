@@ -20,7 +20,7 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
           <label>SKU <input type="text" [value]="product.sku" /></label>
           <label>Name <input type="text" [value]="product.name" /></label>
           <label>Price <input type="number" [value]="product.price" /></label>
-          <label>Currency <input type="text" [value]="product.currency ?? 'EUR'" /></label>
+          <label>Currency <input type="text" [value]="product.id ?? 'EUR'" /></label>
         </div>
       } @else {
         <div class="form-grid">

@@ -1,18 +1,20 @@
-package com.vseonlineshop.payment.service;
+package com.vseonlineshop.payment.kafka.services;
 
 
+import com.paypal.sdk.models.Order;
 import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentTransaction;
-import com.vseonlineshop.payment.event.*;
-import com.vseonlineshop.payment.event.payment.*;
-import com.vseonlineshop.payment.event.system.SecurityAlertPayload;
-import com.vseonlineshop.payment.event.system.SystemAlertPayload;
+import com.vseonlineshop.payment.kafka.event.DomainEvent;
+import com.vseonlineshop.payment.kafka.event.pament.*;
+import com.vseonlineshop.payment.kafka.event.system.SecurityAlertPayload;
+import com.vseonlineshop.payment.kafka.event.system.SystemAlertPayload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 
@@ -25,11 +27,12 @@ public class KafkaEventPublisher {
 
     @Value("${kafka.topics.payment}")
     private String paymentTopic;
-    @Value("${kafka.topics.alerts}")
-    private String alertTopic;
 
-    @Value("${kafka.topics.audit-events}")
-    private String auditEvents;
+    @Value("${kafka.topics.alerts.system}")
+    private String alertSystemTopic;
+
+    @Value("${kafka.topics.alerts.security}")
+    private String alertSycurityTopic;
 
     private static final UUID SYSTEM_FALLBACK_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
@@ -40,7 +43,7 @@ public class KafkaEventPublisher {
                 message,
                 providerTxnId
         );
-        sendAlert(auditEvents, "SYSTEM_ALERT", SYSTEM_FALLBACK_UUID, providerTxnId, payload);
+        sendAlert(alertSystemTopic, "SYSTEM_ALERT", SYSTEM_FALLBACK_UUID, providerTxnId, payload);
     }
 
     // ── SECURITY_ALERT ────────────────────────────────────────────────────────
@@ -51,7 +54,7 @@ public class KafkaEventPublisher {
                 invalidPaymentIdRaw
         );
 
-        sendAlert(auditEvents, "SECURITY_ALERT", SYSTEM_FALLBACK_UUID, invalidPaymentIdRaw, payload);
+        sendAlert(alertSycurityTopic, "SECURITY_ALERT", SYSTEM_FALLBACK_UUID, invalidPaymentIdRaw, payload);
     }
 
     // ── WEBHOOK_DUPLICATE_IGNORED (Idempotenz-Hit) ─────────────────────────────
@@ -78,7 +81,7 @@ public class KafkaEventPublisher {
                 txn.getRawResponse()
         );
 
-        send(payment, auditEvents, "PAYMENT_NOTIFICATION_RECEIVED", payload);
+        send(payment, alertSystemTopic, "PAYMENT_NOTIFICATION_RECEIVED", payload);
     }
 
     public void publishPaymentCreated(Payment payment) {
@@ -93,6 +96,33 @@ public class KafkaEventPublisher {
                 payment.getStatus()
         );
         send(payment, paymentTopic, "PAYMENT_INITIALIZED", payload);
+    }
+
+    // ── PAYMENT_PAYPAL_CAPTURED ─────────────────────────────────────────
+    public void publishPaymentCaptured(Payment payment, Order capturedOrder) {
+        String paypalCaptureId = extractCaptureId(capturedOrder);
+
+        var payload = new PaymentCapturedPayload(
+                payment.getPaymentId(),
+                payment.getOrderId(),
+                payment.getCorrelationId(),
+                payment.getUserId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                paypalCaptureId
+        );
+
+        send(payment, paymentTopic, "PAYMENT_PAYPAL_CAPTURED", payload);
+    }
+
+    // Kleine Hilfsmethode, da PayPal Captures tief in der PurchaseUnit versteckt
+    private String extractCaptureId(Order capturedOrder) {
+        try {
+            return capturedOrder.getPurchaseUnits().get(0)
+                    .getPayments().getCaptures().get(0).getId();
+        } catch (Exception e) {
+            return "UNKNOWN";
+        }
     }
 
 
@@ -127,6 +157,52 @@ public class KafkaEventPublisher {
                 txn.getRawResponse()
         );
         send(payment, paymentTopic, "PAYMENT_FAILED", payload);
+    }
+
+    // Event 1: Refund wurde gestartet
+    public void publishRefundInitialized(Payment payment, BigDecimal refundAmount) {
+        var payload = new RefundInitializedPayload(
+                payment.getPaymentId(),
+                payment.getOrderId(),
+                payment.getCorrelationId(),
+                payment.getUserId(),
+                payment.getPaymentMethod(),
+                refundAmount,
+                payment.getCurrency(),
+                "REFUND_INITIALIZED"
+        );
+        send(payment, paymentTopic, "REFUND_INITIALIZED", payload);
+    }
+
+    // Event 2: Refund war erfolgreich bei Stripe/PayPal
+    public void publishRefundSucceeded(Payment payment, String refundTransactionId, BigDecimal refundAmount) {
+        var payload = new RefundSucceededPayload(
+                payment.getPaymentId(),
+                payment.getOrderId(),
+                payment.getCorrelationId(),
+                payment.getUserId(),
+                payment.getPaymentMethod(),
+                refundAmount,
+                refundTransactionId, // Die von Stripe/PayPal zurückgegebene Refund-ID
+                payment.getCurrency(),
+                "REFUND_SUCCEEDED"
+        );
+        send(payment, paymentTopic, "REFUND_SUCCEEDED", payload);
+    }
+
+    // Event 3 (Optional aber wichtig für Saga): Refund ist fehlgeschlagen
+    public void publishRefundFailed(Payment payment, String reason) {
+        var payload = new RefundFailedPayload(
+                payment.getPaymentId(),
+                payment.getOrderId(),
+                payment.getCorrelationId(),
+                payment.getPaymentMethod(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                reason,
+                "REFUND_FAILED"
+        );
+        send(payment, paymentTopic, "REFUND_FAILED", payload);
     }
 
     // ── Interner Send (fire & forget) ──────────────────────

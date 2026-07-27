@@ -1,16 +1,20 @@
 package com.vseonlineshop.payment.entity;
 
-import com.vseonlineshop.payment.dto.PaymentMethod;
-import com.vseonlineshop.payment.enums.PaymentStatus;
+import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "payment")
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Payment {
 
     @Id
@@ -26,6 +30,8 @@ public class Payment {
 
     @Column(name = "user_id")
     private UUID userId;
+
+    private String refundTransactionId;
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
@@ -57,5 +63,7 @@ public class Payment {
     }
 
     @PreUpdate
-    void onUpdate() { updatedAt = Instant.now(); }
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
 }

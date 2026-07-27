@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -25,20 +26,20 @@ public class OrderTransactionHelper {
     private final ProductRepository productRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order createInitialOrder(OrderRequest request) {
-        UUID correlationId = UUID.randomUUID();
+    public Order createInitialOrder(OrderRequest request, UUID correlationId) {
         Order order = buildInitialOrder(request, correlationId);
         return orderRepository.save(order);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order updateToProcessing(UUID orderId, BigDecimal total, UUID reservationId) {
-        Order order = orderRepository.findById(orderId).orElseThrow();
-        order.setTotalAmount(total);
-        order.setStatus(OrderStatus.PROCESSING);
-        order.setReservationId(reservationId);
-        order.setUpdatedAt(LocalDateTime.now());
-        return orderRepository.save(order);
+    public Order updateToProcessing(Order order, UUID reservationId) {
+        Order orderDb = orderRepository.findById(order.getId()).orElseThrow();
+        BigDecimal total = calculateTotal(orderDb.getItems());
+        orderDb.setTotalAmount(total);
+        orderDb.setStatus(OrderStatus.PROCESSING);
+        orderDb.setReservationId(reservationId);
+        orderDb.setUpdatedAt(LocalDateTime.now());
+        return orderRepository.save(orderDb);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -49,6 +50,12 @@ public class OrderTransactionHelper {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
         return toResponse(order, payment.approvalUrl());
+    }
+
+    public BigDecimal calculateTotal(List<OrderItem> items) {
+        return items.stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private CustomerInformation toCustomer(CustomerInformationRequest request) {

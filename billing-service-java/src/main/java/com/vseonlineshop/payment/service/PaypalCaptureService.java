@@ -5,11 +5,17 @@ import com.paypal.sdk.controllers.OrdersController;
 import com.paypal.sdk.http.response.ApiResponse;
 import com.paypal.sdk.models.CaptureOrderInput;
 import com.paypal.sdk.models.Order;
+import com.vseonlineshop.payment.entity.Payment;
+import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.exception.GlobalException;
 import com.vseonlineshop.payment.exception.PaypalCaptureException;
+import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
+import com.vseonlineshop.payment.repository.PaymentTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -18,16 +24,30 @@ public class PaypalCaptureService {
 
     private final PaypalServerSdkClient paypalClient;
     private final KafkaEventPublisher kafkaEventPublisher;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
-    public String captureOrder(String orderId) {
 
-        log.info("[PAYPAL/CAPTURE] Starte Geld-Einzug für Order-ID: {}", orderId);
+    public String captureOrder(String paypalToken) {
+
+        log.info("[PAYPAL/CAPTURE] Starte Geld-Einzug für Order-ID: {}", paypalToken);
+
+        Payment payment = paymentTransactionRepository.findPaymentByProviderTransactionId(paypalToken)
+                .orElseThrow(() -> new GlobalException("Zahlungstoken unbekannt: " + paypalToken));
+
+        UUID correlationId = payment.getCorrelationId();
+
+        // 2. IDEMPOTENZ-CHECK
+        if (payment.getStatus() == PaymentStatus.CONFIRMED) {
+            log.warn("[PAYPAL/IDEMPOTENZ] Payment für Token '{}' (Correlation-ID: {}) wurde bereits verarbeitet. Überspringe Capture.",
+                    paypalToken, correlationId);
+            return "Zahlung wurde bereits erfolgreich verarbeitet.";
+        }
 
         try {
             OrdersController ordersController = paypalClient.getOrdersController();
 
             CaptureOrderInput captureOrderInput = new CaptureOrderInput.Builder(
-                    orderId,
+                    paypalToken,
                     null
             )
                     .prefer("return=representation")
@@ -40,15 +60,16 @@ public class PaypalCaptureService {
 
             if ("COMPLETED".equalsIgnoreCase(capturedOrder.getStatus().toString())) {
                 log.info("[PAYPAL/SUCCESS] Geld eingezogen! Webhook wird  gefeuert...");
+                kafkaEventPublisher.publishPaymentCaptured(payment, capturedOrder);
                 return "Zahlung erfolgreich gecaptured!";
             } else {
-                publishSystemAlert(orderId);
+                publishSystemAlert(paypalToken);
                 throw new PaypalCaptureException("Zahlung fehlgeschlagen. Status: " + capturedOrder.getStatus());
             }
 
         } catch (Exception e) {
             log.error("[PAYPAL/CAPTURE-ERROR] Fehler beim Einziehen des Geldes", e);
-            publishSystemAlert(orderId);
+            publishSystemAlert(paypalToken);
             throw new GlobalException("Fehler beim Zahlungseinzug");
         }
     }

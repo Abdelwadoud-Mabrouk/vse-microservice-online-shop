@@ -1,4 +1,4 @@
-package com.vseonlineshop.payment.dto;
+package com.vseonlineshop.payment.dto.enums;
 
 public enum PaymentMethod {
     CREDIT_CARD,

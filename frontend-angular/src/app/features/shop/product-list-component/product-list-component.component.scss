@@ -1,0 +1,121 @@
+.showcase-card span,
+.price-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.showcase-card strong {
+  font-size: 1.4rem;
+}
+
+.showcase-card.floating strong {
+  color: var(--primary);
+  font-size: 2.2rem;
+}
+
+.shop-benefits {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 26px;
+}
+
+.shop-benefits article {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.shop-benefits span,
+.shop-cta p {
+  color: var(--muted);
+}
+
+.shop-section-head {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 14px;
+}
+
+.shop-section-head h2,
+.shop-cta h2 {
+  margin: 4px 0 0;
+}
+
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-tabs .active {
+  background: var(--primary);
+  color: white;
+}
+
+.shop-card {
+  border-color: rgba(15, 122, 90, 0.12);
+  box-shadow: 0 14px 34px rgba(23, 32, 27, 0.07);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.shop-card:hover {
+  border-color: rgba(15, 122, 90, 0.34);
+  box-shadow: 0 20px 46px rgba(23, 32, 27, 0.12);
+  transform: translateY(-2px);
+}
+
+.product-card-body {
+  min-height: 126px;
+}
+
+.product-meta {
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  justify-content: space-between;
+  text-transform: uppercase;
+}
+
+.product-actions {
+  align-items: end;
+}
+
+.product-actions strong {
+  display: block;
+  font-size: 1.28rem;
+  margin-top: 2px;
+}
+
+.shop-cta {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid #f2d7ac;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding: 22px;
+}
+
+.product-media {
+  display: block;
+  width: 100%;
+  height: 320px;
+  overflow: hidden;
+}
+
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

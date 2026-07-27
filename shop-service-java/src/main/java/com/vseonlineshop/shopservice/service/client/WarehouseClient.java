@@ -15,6 +15,9 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.Map;
+
+import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
 @Slf4j
@@ -22,22 +25,38 @@ public class WarehouseClient {
 
     private final RestClient restClient;
 
+
     public WarehouseClient(@Value("${services.warehouse.url}") String baseUrl) {
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .build();
     }
 
-    @Retry(name = "warehouse")
+    @Retry(name = "warehouseReserve")
     public ReservationResponse reserve(Order order) {
+        log.info(
+                "Warehouse Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "POST /reservations"
+                ))
+        );
         return post("/reservations",
                 order,
                 buildRequest(order),
                 ReservationResponse.class);
     }
 
-    @Retry(name = "warehouse")
+    @Retry(name = "warehouseCommit")
     public ReservationCommitedResponse reservationCommited(Order order) {
+
+        log.info(
+                "Warehouse Commit Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "POST /reservations/{id}/commit"
+                ))
+        );
         return post("/reservations/{id}/commit",
                 order,
                 buildRequest(order),
@@ -45,7 +64,7 @@ public class WarehouseClient {
                 order.getReservationId());
     }
 
-    @Retry(name = "warehouse")
+    @Retry(name = "warehouseCancel")
     public ReservationResponse cancelReservation(Order order) {
         return delete(
                 order,
@@ -54,7 +73,13 @@ public class WarehouseClient {
     }
 
     private <T> T delete(Order order, Object... uriVars) {
-        log.info("[WarehouseClient] DELETE /reservations/{} for order={}", uriVars, order.getId());
+        log.info(
+                "Warehouse Delete Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "DELETE /reservations/{id}"
+                ))
+        );
 
         try {
             return restClient.delete()
@@ -70,12 +95,24 @@ public class WarehouseClient {
                     .body((Class<T>) ReservationResponse.class);
 
         } catch (ResourceAccessException | HttpServerErrorException ex) {
-            log.error("[WarehouseClient] Temporärer Warehouse Fehler (wird per Retry wiederholt) für order={}: {}",
-                    order.getId(), ex.getMessage());
+            log.error(
+                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
             throw ex;
         } catch (RestClientException ex) {
-            log.error("[WarehouseClient] Warehouse Business/Client Fehler (kein Retry) für order={}: {}",
-                    order.getId(), ex.getMessage());
+            log.error(
+                    "Warehouse Business/Client Fehler (kein Retry)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
             throw ex;
         }
     }
@@ -85,9 +122,6 @@ public class WarehouseClient {
                        Object body,
                        Class<T> responseType,
                        Object... uriVars) {
-
-        log.info("[WarehouseClient] POST {} for order={}", uri, order.getId());
-        log.debug("[WarehouseClient] Payload: {}", body);
 
         try {
             return restClient.post()
@@ -105,12 +139,24 @@ public class WarehouseClient {
                     .body(responseType);
 
         } catch (ResourceAccessException | HttpServerErrorException ex) {
-            log.error("[WarehouseClient] Temporärer Warehouse Fehler (wird per Retry wiederholt) für order={}: {}",
-                    order.getId(), ex.getMessage());
+            log.error(
+                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
             throw ex;
         } catch (RestClientException ex) {
-            log.error("[WarehouseClient] Warehouse Business/Client Fehler (kein Retry) für order={}: {}",
-                    order.getId(), ex.getMessage());
+            log.error(
+                    "Warehouse Business/Client Fehler (kein Retry)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
             throw ex;
         }
     }
