@@ -1,61 +1,73 @@
 package com.vseonlineshop.shopservice.service.shop;
 
-import com.vseonlineshop.shopservice.domain.Order;
-import com.vseonlineshop.shopservice.domain.OrderItem;
-import com.vseonlineshop.shopservice.domain.OrderStatus;
+import com.vseonlineshop.shopservice.domain.*;
+import com.vseonlineshop.shopservice.dto.order.response.*;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
-import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
-import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
-import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
+import com.vseonlineshop.shopservice.dto.order.request.OrderRequest;
 import com.vseonlineshop.shopservice.dto.warehouse.*;
-import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
 import com.vseonlineshop.shopservice.exception.*;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import com.vseonlineshop.shopservice.event.producer.KafkaEventPublisher;
-import com.vseonlineshop.shopservice.service.client.PaymentClient;
+import com.vseonlineshop.shopservice.service.client.BillingService;
 import com.vseonlineshop.shopservice.service.client.WarehouseClient;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Slf4j
 public class OrderApplicationService {
 
-    private static final Logger log = LoggerFactory.getLogger(OrderApplicationService.class);
-
     private final OrderRepository orderRepository;
-    private final WarehouseClient warehouseClient;
-    private final PaymentClient paymentClient;
-    private final KafkaEventPublisher kafkaEventPublisher;
     private final OrderTransactionHelper orderTransactionHelper;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final WarehouseClient warehouseClient;
+    private final BillingService paymentClient;
+    private final KafkaEventPublisher kafkaEventPublisher;
+    private final ToolService toolService;
+
 
     // ── Create Order ─────────────────────────────────────────────────────────
-    public OrderResponse createOrder(OrderRequest request) {
+    public CheckoutResponse createOrder(OrderRequest request) {
         Order order;
+        long start = System.currentTimeMillis();
 
         // ── STEP 1: Initiales Anlegen ───────────────────
+        UUID correlationId = UUID.randomUUID();
         try {
-            order = orderTransactionHelper.createInitialOrder(request);
-            log.info("[OrderService] Order {} angelegt (correlationId={})", order.getId(), order.getCorrelationId());
+            order = orderTransactionHelper.createInitialOrder(request, correlationId);
+            log.info(
+                    "Order erfolgreich angelegt",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus()
+                    ))
+            );
             Order finalOrder = order;
-            safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
+            toolService.safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
         } catch (Exception ex) {
-            log.error("[CRITICAL] Konnte initiale Order nicht in DB anlegen: {}", ex.getMessage());
-            cancelOrder(null, null, "CREATION_ORDER_FAILED", ex);
+
+            log.error(
+                    "Konnte initiale Order nicht in DB anlegen",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "errorCode", "CREATION_ORDER_FAILED",
+                            "errorMessage", ex.getMessage()
+                    ))
+                    , ex);
+            toolService.cancelOrder(null, null, OrderStatus.CANCELLED, "CREATION_ORDER_FAILED", ex);
             throw new GlobalException("DATABASE_ERROR", "Bestellung konnte nicht angelegt werden.");
         }
 
@@ -65,170 +77,218 @@ public class OrderApplicationService {
             // STEP 2: Warehouse reservieren
             try {
                 reservation = warehouseClient.reserve(order);
-            } catch (RestClientException ex) {
-                log.error("[WAREHOUSE ERROR] Warehouse unreachable for Order {}", order.getId(), ex);
-                cancelOrder(order, null, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
-                throw new ServiceUnavailableException("WAREHOUSE_SERVICE_UNAVAILABLE", "Lager offline.");
+            } catch (HttpClientErrorException ex) {
+                // 4xx Fehler
+                log.warn(
+                        "Bestand reicht nicht fuer Order",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "httpStatus", ex.getStatusCode().value(),
+                                "errorMessage", ex.getMessage()
+                        ))
+                );
+
+                // Setzt Status auf OUT_OF_STOCK und bricht SOFORT ab (kein Retry/weiterer Aufruf)
+                toolService.cancelOrder(order, null, OrderStatus.OUT_OF_STOCK, "OUT_OF_STOCK", ex);
+                throw new BusinessException("OUT_OF_STOCK", HttpStatus.CONFLICT);
+
+            } catch (ResourceAccessException | HttpServerErrorException ex) {
+                // 5xx Server Error oder Timeout/Connection Refused: Service wirklich DOWN
+                log.error(
+                        "Lager-Service nicht erreichbar",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "errorMessage", ex.getMessage()
+                        )),
+                        ex
+                );
+
+                toolService.cancelOrder(order, null, OrderStatus.CANCELLED, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
+                throw new ServiceUnavailableException("WAREHOUSE_SERVICE_UNAVAILABLE", "Lager-Service derzeit nicht erreichbar.");
             }
 
-            if (reservation.items() == null || reservation.items().isEmpty()) {
-                cancelOrder(order, null, "EMPTY_RESERVATION", null);
-                throw new BusinessException("Warehouse returned empty items.");
+            if (reservation == null || reservation.items() == null || reservation.items().isEmpty()) {
+                log.error(
+                        "Warehouse lieferte eine leere Reservierung",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId()
+                        ))
+                );
+                toolService.cancelOrder(order, null, OrderStatus.CANCELLED, "EMPTY_RESERVATION", null);
+                throw new BusinessException("EMPTY_RESERVATION", HttpStatus.BAD_REQUEST);
             }
-
-            // STEP 3: Total berechnen & Update auf PROCESSING
-            BigDecimal total = calculateTotal(order.getItems());
 
             // Save ReservationId in order Tabelle (needed to commit reservation)
-            order = orderTransactionHelper.updateToProcessing(order.getId(), total, reservation.reservationId());
+            order = orderTransactionHelper.updateToProcessing(order, reservation.reservationId());
 
-            // STEP 4: Payment aufrufen
+            //  Payment aufrufen
             PaymentResponse payment;
             try {
                 payment = paymentClient.pay(order);
-            } catch (RestClientException ex) {
-                log.error("[PAYMENT ERROR] Payment-Service unreachable for Order {}", order.getId(), ex);
-                cancelOrder(order, reservation.reservationId(), "PAYMENT_SERVICE_UNAVAILABLE", ex);
-                throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice offline.");
+            } catch (HttpClientErrorException ex) {
+                // 4xx
+                log.warn(
+                        "Payment Request vom Billing-Service abgelehnt",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "reservationId", reservation.reservationId(),
+                                "httpStatus", ex.getStatusCode().value(),
+                                "errorMessage", ex.getMessage()
+                        ))
+                );
+
+                // Rollback durchführen (Lager freigeben)
+                toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.PAYMENT_FAILED, "INVALID_PAYMENT_REQUEST", ex);
+
+                throw new BusinessException("INVALID_PAYMENT_REQUEST", HttpStatus.PAYMENT_REQUIRED);
+
+            } catch (ResourceAccessException | HttpServerErrorException ex) {
+                // 5xx / Timeout: Nach 4 Retries immer noch offline/down
+                log.error(
+                        "Payment-Service nach allen Retry-Versuchen nicht erreichbar",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "status", order.getStatus(),
+                                "errorMessage", ex.getMessage()
+                        )),
+                        ex
+                );
+
+                // Rollback durchführen (Lager freigeben)
+                toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.PAYMENT_FAILED, "PAYMENT_SERVICE_UNAVAILABLE", ex);
+
+                throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice derzeit nicht erreichbar.");
+
             }
 
             // Fall 1: Sofortiger Zahlungsfehler vom Provider
+            // todo: Check if we need it
             if ("FAILED".equalsIgnoreCase(String.valueOf(payment.status()))) {
-                cancelOrder(order, reservation.reservationId(), "PAYMENT_FAILED", null);
+                toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.CANCELLED, "PAYMENT_FAILED", null);
                 throw new PaymentServiceException("Zahlung fehlgeschlagen.");
             }
 
-            // Fall 2: Erfolg / PENDING -> Update auf AWAITING_PAYMENT
-            return orderTransactionHelper.updateToAwaitingPayment(order.getId(), payment);
 
-        } catch (Exception ex) {
-            log.error("[FATAL CRASH] Unerwarteter Fehler im Order-Prozess für Order {}", order.getId(), ex);
+            CheckoutResponse checkoutResponse = orderTransactionHelper.updateToAwaitingPayment(order.getId(), payment);
+            log.info(
+                    "Checkout erfolgreich gestartet",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "paymentStatus", payment.status(),
+                            "reservationId", reservation.reservationId(),
+                            "durationMs", System.currentTimeMillis() - start
+                    ))
+            );
+            return checkoutResponse;
 
+        }
+        catch (ServiceUnavailableException ex) {
 
-            if (!(ex instanceof ServiceUnavailableException || ex instanceof BusinessException || ex instanceof PaymentServiceException)) {
+            log.warn(
+                    "Externer Service nicht verfügbar",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorCode", ex.getErrorCode(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
 
-                UUID resId = (reservation != null) ? reservation.orderId() : null;
+            throw ex;
+        } catch (BusinessException ex) {
 
-                cancelOrder(order, resId, "ORDER_PROCESSING_INTERNAL_ERROR", ex);
-                throw new GlobalException("INTERNAL_SYSTEM_ERROR", "Ein interner Fehler ist aufgetreten. Bestellung storniert.");
-            }
+            log.warn(
+                    "Business Fehler im Order-Prozess",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorCode", ex.getErrorCode(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
+
+            throw ex;
+        } catch (PaymentServiceException ex) {
+
+            log.warn(
+                    "Payment Fehler im Order-Prozess",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
 
             throw ex;
         }
+
+
+        catch (Exception ex) {
+
+            log.error(
+                    "Unerwarteter Fehler im Order-Prozess",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
+
+
+            UUID resId =
+                    (reservation != null)
+                            ? reservation.reservationId()
+                            : null;
+
+
+            toolService.cancelOrder(
+                    order,
+                    resId,
+                    OrderStatus.CANCELLED,
+                    "ORDER_PROCESSING_INTERNAL_ERROR",
+                    ex
+            );
+
+
+            throw new GlobalException(
+                    "INTERNAL_SYSTEM_ERROR",
+                    "Ein interner Fehler ist aufgetreten. Bestellung storniert."
+            );
+        }
+
     }
 
-    // ── Get Order ─────────────────────────────────────────────────────────────
 
-    @Transactional(readOnly = true)
-    public OrderResponse getOrder(UUID orderId) {
+    public OrderDetailsResponse getOrder(UUID orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
-        return toResponse(order);
+        return toolService.toResponse(order);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private BigDecimal calculateTotal(List<OrderItem> items) {
-        return items.stream()
-                .map(OrderItem::getTotalPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    public Map<String, String> capturePaypal(String token) {
+        return paymentClient.capturePaypal(token);
     }
 
-
-    private OrderResponse toResponse(Order order) {
-        List<OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getProductName(),
-                        item.getQuantity(),
-                        item.getPricePerUnit(),
-                        item.getSubTotal(),
-                        item.getTaxRate(),
-                        item.getTaxAmount(),
-                        item.getTotalPrice()
-                ))
-                .toList();
-
-        return new OrderResponse(
-                order.getId(),
-                order.getUserId(),
-                order.getPaymentId(),
-                order.getStatus(),
-                order.getTotalAmount(),
-                order.getCurrency(),
-                order.getPaymentMethod(),
-                itemResponses,
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                null
-        );
-    }
-
-    private void cancelOrder(Order order, UUID reservationOrderId, String reason, Throwable exception) {
-
-        if (order != null) {
-            try {
-                order.setStatus(OrderStatus.CANCELLED);
-                order.setUpdatedAt(LocalDateTime.now());
-                orderRepository.save(order);
-                log.info("[OrderService] Order {} in DB erfolgreich storniert.", order.getId());
-            } catch (Exception dbEx) {
-                log.error("[CRITICAL DB ERROR] Konnte Status in DB nicht auf CANCELLED setzen, da die DB blockiert/down ist! Führe Kafka-Rollback trotzdem fort.", dbEx);
-            }
-
-            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
-
-            if (reservationOrderId != null) {
-                log.info(
-                        "[OrderService] Triggering warehouse reservation rollback. reservationId={}, orderId={}",
-                        reservationOrderId,
-                        order.getId());
-
-                safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(order));
-
-                try {
-                    ReservationResponse response = warehouseClient.cancelReservation(order);
-
-                    log.info(
-                            "[WarehouseClient] Reservation cancelled successfully. reservationId={}, orderId={}, status={}",
-                            response.reservationId(),
-                            response.orderId(),
-                            response.status());
-
-                } catch (Exception ex) {
-                    log.error(
-                            "[WarehouseClient] Failed to cancel reservation. reservationId={}, orderId={}, correlationId={}",
-                            reservationOrderId,
-                            order.getId(),
-                            order.getCorrelationId(),
-                            ex);
-                }
-            }
-        }
-        Map<String, String> metadata = Map.of(
-                "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
-                "exceptionClass", exception != null ? exception.getClass().getSimpleName() : "Unknown"
-        );
-
-        SystemAlertPayload alertPayload = new SystemAlertPayload(
-                UUID.randomUUID().toString(),
-                "shop-service",
-                order != null ? order.getId().toString() : "N/A",
-                "Kritischer Ausfall! Grund: " + reason + " | Details: " + (exception != null ? exception.getMessage() : "Keine"),
-                Instant.now(),
-                metadata
-        );
-
-        safePublish(() -> kafkaEventPublisher.publishSystemAlert(order, alertPayload));
-    }
-
-    private void safePublish(Runnable publishAction) {
-        try {
-            publishAction.run();
-        } catch (Exception e) {
-            // todo: Wie können wir damit umgehen, damit wir die Nachvollziehbarkeit nicht verlieren können : Transactional Outbox Pattern.
-            log.error("[Kafka] Event konnte nicht gesendet werden: {}", e.getMessage(), e);
-        }
-    }
 
 }

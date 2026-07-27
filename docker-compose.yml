@@ -306,6 +306,8 @@ services:
       container_name: stripe-cli
       command:
         - listen
+        - --api-key
+        - ${STRIPE_SECRET_KEY}
         - --forward-to
         - http://billing-service:8089/api/v1/billing/webhook/stripe
       volumes:

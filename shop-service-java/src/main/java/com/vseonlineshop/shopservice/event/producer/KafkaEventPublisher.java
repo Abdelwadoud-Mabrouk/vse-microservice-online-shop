@@ -3,6 +3,7 @@ package com.vseonlineshop.shopservice.event.producer;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderItem;
+import com.vseonlineshop.shopservice.dto.payment.RefundResponseDto;
 import com.vseonlineshop.shopservice.event.dtos.*;
 import com.vseonlineshop.shopservice.event.dtos.order.*;
 import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
@@ -12,6 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
+
+import static net.logstash.logback.argument.StructuredArguments.kv;
 
 
 /**
@@ -52,18 +57,18 @@ public class KafkaEventPublisher {
                 order.getUserId(),
                 reason
         );
-        send(ordersTopic, order, "ORDER_CANCELLED", payload);
+        send(ordersTopic, order, "ORDER_" + order.getStatus(), payload);
     }
 
     public void publishOrderCompleted(Order order) {
 
         var customer = new CustomerPayload(
-                "Mock User",
-                "mock@email.com",
-                "Street 1",
-                "00000",
-                "Berlin",
-                "DE"
+                order.getCustomer().getLastName() + " " + order.getCustomer().getFirstName(),
+                order.getCustomer().getEmail(),
+                order.getShippingAddress().getStreet(),
+                order.getShippingAddress().getPostalCode(),
+                order.getShippingAddress().getCity(),
+                order.getShippingAddress().getCountry()
         );
 
         var payload = new OrderCompletedPayload(
@@ -88,6 +93,31 @@ public class KafkaEventPublisher {
         send(ordersTopic, order, "ORDER_COMPLETED", payload);
     }
 
+    public void publishOrderRollbackCompleted(Order order, RefundResponseDto refundResponse, String reason) {
+        var payload = new OrderRollbackCompletedPayload(
+                order.getId(),
+                order.getUserId(),
+                order.getTotalAmount(),
+                order.getCurrency(),
+                order.getCorrelationId(),
+                order.getPaymentId(),
+                refundResponse.providerRefundTransactionId(),
+                reason
+
+        );
+
+        send(ordersTopic, order, "ORDER_ROLLBACK_COMPLETED", payload);
+    }
+
+    public void publishWarehouseDispatchFailed(Order order, String reason) {
+        var payload = new WarehouseDispatchFailedPayload(
+                order.getId(),
+                order.getCorrelationId(),
+                reason
+        );
+        send(ordersTopic, order, "WAREHOUSE_DISPATCH_FAILED", payload);
+    }
+
     public void publishReservationRollbackRequested(Order order) {
         var payload = new ReservationRollbackPayload(
                 order.getId(),
@@ -101,51 +131,59 @@ public class KafkaEventPublisher {
         send(alertTopic, order, "SYSTEM_ALERT", payload);
     }
 
-    // ── SYSTEM_ALERT ──────────────────────────────────────────────────────────
 
     private void send(String topic, Order order, String eventType, Object payload) {
+
+        if (order == null) {
+
+            log.error(
+                    "Kafka Event konnte nicht gesendet werden - Order ist null",
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "eventType", eventType,
+                            "topic", topic
+                    ))
+            );
+
+            return;
+        }
 
         var event = DomainEvent.of(
                 eventType,
                 "shop-service",
-                order != null ? order.getCorrelationId() : null,
+                order.getCorrelationId(),
                 payload
         );
 
-        log.info("AUDIT TOPIC CONFIG = {}", topic);
-        log.info("TARGET TOPIC = {}", topic);
-        log.info("EVENT TYPE = {}, ORDER ID = {}", eventType, order != null ? order.getId() : null);
-        log.info("EVENT PAYLOAD = {}", event);
-
-        if (order == null) {
-            log.error("ORDER IS NULL → abort send()");
-            return;
-        }
-
         try {
-            var future = kafkaTemplate.send(topic, order.getId().toString(), event);
+            var result = kafkaTemplate.send(topic, order.getId().toString(), event).get();
 
-            future.whenComplete((result, ex) -> {
-                if (ex != null) {
-                    log.error(" KAFKA SEND FAILED");
-                    log.error("   → eventType = {}", eventType);
-                    log.error("   → orderId   = {}", order.getId());
-                    log.error("   → topic     = {}", topic);
-                    log.error("   → error     = {}", ex.getMessage(), ex);
-                } else {
-                    log.info(" KAFKA SEND SUCCESS");
-                    log.info("   → eventType = {}", eventType);
-                    log.info("   → orderId   = {}", order.getId());
-                    log.info("   → topic     = {}", result.getRecordMetadata().topic());
-                    log.info("   → partition = {}", result.getRecordMetadata().partition());
-                    log.info("   → offset    = {}", result.getRecordMetadata().offset());
-                }
-            });
-
-            future.get();
+            log.debug(
+                    "Kafka Event erfolgreich gesendet",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "eventType", eventType,
+                            "orderId", order.getId(),
+                            "topic", topic,
+                            "partition", result.getRecordMetadata().partition(),
+                            "offset", result.getRecordMetadata().offset()
+                    ))
+            );
 
         } catch (Exception e) {
-            log.error(" EXCEPTION DURING KAFKA SEND", e);
+            log.error(
+                    "Kafka Event Senden fehlgeschlagen",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "eventType", eventType,
+                            "orderId", order.getId(),
+                            "topic", topic,
+                            "errorMessage", e.getMessage()
+                    )),
+                    e
+            );
         }
     }
 

@@ -1,30 +1,30 @@
 package com.vseonlineshop.shopservice.service.client;
 
-
 import com.vseonlineshop.shopservice.domain.Order;
-import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
-import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequest;
-import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequestItem;
-import com.vseonlineshop.shopservice.dto.warehouse.ReservationResponse;
+import com.vseonlineshop.shopservice.dto.warehouse.*;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.List;
+import java.util.Map;
+
+import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
 @Slf4j
 public class WarehouseClient {
 
-
     private final RestClient restClient;
+
 
     public WarehouseClient(@Value("${services.warehouse.url}") String baseUrl) {
         this.restClient = RestClient.builder()
@@ -32,14 +32,31 @@ public class WarehouseClient {
                 .build();
     }
 
+    @Retry(name = "warehouseReserve")
     public ReservationResponse reserve(Order order) {
+        log.info(
+                "Warehouse Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "POST /reservations"
+                ))
+        );
         return post("/reservations",
                 order,
                 buildRequest(order),
                 ReservationResponse.class);
     }
 
+    @Retry(name = "warehouseCommit")
     public ReservationCommitedResponse reservationCommited(Order order) {
+
+        log.info(
+                "Warehouse Commit Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "POST /reservations/{id}/commit"
+                ))
+        );
         return post("/reservations/{id}/commit",
                 order,
                 buildRequest(order),
@@ -47,6 +64,7 @@ public class WarehouseClient {
                 order.getReservationId());
     }
 
+    @Retry(name = "warehouseCancel")
     public ReservationResponse cancelReservation(Order order) {
         return delete(
                 order,
@@ -54,42 +72,56 @@ public class WarehouseClient {
         );
     }
 
-    private <T> T delete(Order order,
-                         Object... uriVars) {
-
-        log.info("[WarehouseClient] DELETE {} for order={}", "/reservations/{id}", order.getId());
+    private <T> T delete(Order order, Object... uriVars) {
+        log.info(
+                "Warehouse Delete Request gestartet",
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "operation", "DELETE /reservations/{id}"
+                ))
+        );
 
         try {
             return restClient.delete()
                     .uri("/reservations/{id}", uriVars)
                     .header("X-Correlation-Id", order.getCorrelationId().toString())
                     .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        throw new RuntimeException(
-                                "Warehouse call failed: HTTP " + res.getStatusCode()
-                        );
+                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                        throw new HttpServerErrorException(res.getStatusCode(), "Warehouse 5xx Server Error");
+                    })
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                        throw new HttpClientErrorException(res.getStatusCode(), "Warehouse 4xx Client Error");
                     })
                     .body((Class<T>) ReservationResponse.class);
 
+        } catch (ResourceAccessException | HttpServerErrorException ex) {
+            log.error(
+                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
+            throw ex;
         } catch (RestClientException ex) {
             log.error(
-                    "[CRITICAL] Warehouse-Service DOWN while cancelling reservation for order={}",
-                    order.getId(),
+                    "Warehouse Business/Client Fehler (kein Retry)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
                     ex
             );
             throw ex;
         }
     }
 
-
     private <T> T post(String uri,
                        Order order,
                        Object body,
                        Class<T> responseType,
                        Object... uriVars) {
-
-        log.info("[WarehouseClient] POST {} for order={}", uri, order.getId());
-        log.debug("[WarehouseClient] Payload: {}", body);
 
         try {
             return restClient.post()
@@ -98,15 +130,33 @@ public class WarehouseClient {
                     .header("X-Correlation-Id", order.getCorrelationId().toString())
                     .body(body)
                     .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        throw new RuntimeException(
-                                "Warehouse call failed: HTTP " + res.getStatusCode()
-                        );
+                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                        throw new HttpServerErrorException(res.getStatusCode(), "Warehouse 5xx Server Error");
+                    })
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                        throw new HttpClientErrorException(res.getStatusCode(), "Warehouse 4xx Client Error");
                     })
                     .body(responseType);
 
+        } catch (ResourceAccessException | HttpServerErrorException ex) {
+            log.error(
+                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
+            throw ex;
         } catch (RestClientException ex) {
-            log.error("[CRITICAL] Warehouse-Service DOWN for order={}", order.getId(), ex);
+            log.error(
+                    "Warehouse Business/Client Fehler (kein Retry)",
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
             throw ex;
         }
     }

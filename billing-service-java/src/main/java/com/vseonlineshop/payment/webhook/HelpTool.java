@@ -4,13 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.StripeObject;
-import com.vseonlineshop.payment.dto.WebHookMetadata;
+import com.vseonlineshop.payment.dto.webhook.WebHookMetadata;
 import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentTransaction;
-import com.vseonlineshop.payment.enums.PaymentStatus;
+import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.repository.PaymentRepository;
 import com.vseonlineshop.payment.repository.PaymentTransactionRepository;
-import com.vseonlineshop.payment.service.KafkaEventPublisher;
+import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
 import com.vseonlineshop.payment.webhook.exception.WebhookProcessingException;
 import com.vseonlineshop.payment.webhook.exception.WebhookSignatureException;
 import lombok.AllArgsConstructor;
@@ -115,13 +115,20 @@ public class HelpTool {
         return payment;
     }
 
-    public void handleSuccess(Payment payment, String providerTxnId, String rawResponse, Instant timestamp) {
+    public void handleSuccess(Payment payment, String providerTxnId, String capturedId, String rawResponse, Instant timestamp) {
+        log.info(
+                "ENTER handleSuccess paymentId={} status={} providerTxnId={} capturedId={}",
+                payment.getPaymentId(),
+                payment.getStatus(),
+                providerTxnId,
+                capturedId
+        );
         payment.setStatus(PaymentStatus.CONFIRMED);
         payment.setPaidAt(timestamp);
         payment.setUpdatedAt(timestamp);
 
         paymentRepo.saveAndFlush(payment);
-        PaymentTransaction txn = saveTransaction(payment, providerTxnId, "COMPLETED", null, rawResponse);
+        PaymentTransaction txn = saveTransaction(payment, providerTxnId, capturedId, "COMPLETED", null, rawResponse);
 
         log.info("[WEBHOOK/SUCCESS] CONFIRMED paymentId={} via {}", payment.getPaymentId(), payment.getPaymentMethod());
         safePublish(() -> kafkaEventPublisher.publishPaymentSucceeded(payment, txn));
@@ -132,22 +139,23 @@ public class HelpTool {
         payment.setUpdatedAt(timestamp);
 
         Payment savedPayment = paymentRepo.saveAndFlush(payment);
-        PaymentTransaction txn = saveTransaction(payment, providerTxnId, "FAILED", failureReason, rawResponse);
+        PaymentTransaction txn = saveTransaction(payment, providerTxnId, null,"FAILED", failureReason, rawResponse);
 
         log.warn("[WEBHOOK/FAILURE] FAILED paymentId={} reason={} via {}", payment.getPaymentId(), failureReason, payment.getPaymentMethod());
         safePublish(() -> kafkaEventPublisher.publishPaymentFailed(savedPayment, txn));
     }
 
-    public void handleInformativeEvent(Payment payment, String providerTxnId, String eventType, String rawResponse) {
+    public void handleInformativeEvent(Payment payment, String providerTxnId, String capturedId, String eventType, String rawResponse) {
         log.info("[WEBHOOK/INFO] Non-final event '{}' received for paymentId={}", eventType, payment.getPaymentId());
-        PaymentTransaction txn = saveTransaction(payment, providerTxnId, eventType, null, rawResponse);
+        PaymentTransaction txn = saveTransaction(payment, providerTxnId, capturedId, eventType, null, rawResponse);
         safePublish(() -> kafkaEventPublisher.publishPaymentNotificationReceived(payment, txn, eventType));
     }
 
-    private PaymentTransaction saveTransaction(Payment payment, String providerTxnId, String status, String failureReason, String rawResponse) {
+    private PaymentTransaction saveTransaction(Payment payment, String providerTxnId, String capturedId, String status, String failureReason, String rawResponse) {
         return paymentTransactionRepository.saveAndFlush(PaymentTransaction.builder()
                 .payment(payment)
                 .providerTransactionId(providerTxnId)
+                .captureId(capturedId)
                 .providerStatus(status)
                 .failureReason(failureReason)
                 .rawResponse(rawResponse)
@@ -175,7 +183,7 @@ public class HelpTool {
         }
     }
 
-    public void systemAlarm(){
+    public void systemAlarm() {
         safePublish(() -> kafkaEventPublisher.publishSystemAlert(null, "Internal Error " + null));
     }
 }

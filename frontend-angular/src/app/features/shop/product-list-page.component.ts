@@ -74,13 +74,13 @@ import {
     </section>
 
     <section class="product-grid">
-      @for (product of products$ | async; track product.productId) {
+      @for (product of products$ | async; track product.id) {
         @if (isVisible(product)) {
           <article class="product-card shop-card">
             <a
               class="product-media furniture-photo"
               [style.background-image]="imageStyle(product)"
-              [routerLink]="['/shop/products', product.productId]"
+              [routerLink]="['/shop/products', product.id]"
               [attr.aria-label]="'View ' + product.name"
             >
               <span>{{ categoryLabel(product) }}</span>
@@ -96,10 +96,10 @@ import {
             <div class="card-actions product-actions">
               <div>
                 <span class="price-label">Now</span>
-                <strong>{{ product.price | currency: product.currency ?? 'EUR' }}</strong>
+                <strong>{{ product.price | currency: product.categoryName ?? 'EUR' }}</strong>
               </div>
               <div class="button-row">
-                <a [routerLink]="['/shop/products', product.productId]" class="ghost-button">View</a>
+                <a [routerLink]="['/shop/products', product.id]" class="ghost-button">View</a>
                 <button type="button" (click)="addToCart(product)">Add</button>
               </div>
             </div>

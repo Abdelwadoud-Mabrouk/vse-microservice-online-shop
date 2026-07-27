@@ -4,10 +4,10 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.StripeObject;
-import com.vseonlineshop.payment.dto.WebHookMetadata;
+import com.vseonlineshop.payment.dto.webhook.WebHookMetadata;
 import com.vseonlineshop.payment.entity.Payment;
-import com.vseonlineshop.payment.enums.PaymentStatus;
-import com.vseonlineshop.payment.service.KafkaEventPublisher;
+import com.vseonlineshop.payment.entity.PaymentStatus;
+import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
 import com.vseonlineshop.payment.webhook.HelpTool;
 import com.vseonlineshop.payment.webhook.WebhookHandler;
 import com.vseonlineshop.payment.webhook.exception.WebhookProcessingException;
@@ -85,7 +85,8 @@ public class StripeWebhookHandler implements WebhookHandler {
             // Routing des Event-Typs
             switch (event.getType()) {
                 case "payment_intent.succeeded" ->
-                        helpTool.handleSuccess(payment, checkoutSessionId, rawResponse, Instant.now());
+
+                        helpTool.handleSuccess(payment, checkoutSessionId, null, rawResponse, Instant.now());
                 case "payment_intent.payment_failed" -> {
                     String dynamischerFehlergrund = "Unbekannter Zahlungsfehler";
                     if (paymentIntent.getLastPaymentError() != null) {
@@ -94,7 +95,8 @@ public class StripeWebhookHandler implements WebhookHandler {
                     }
                     helpTool.handleFailure(payment, checkoutSessionId, dynamischerFehlergrund, rawResponse, Instant.now());
                 }
-                default -> helpTool.handleInformativeEvent(payment, checkoutSessionId, event.getType(), rawResponse);
+                default ->
+                        helpTool.handleInformativeEvent(payment, checkoutSessionId, null, event.getType(), rawResponse);
             }
 
 

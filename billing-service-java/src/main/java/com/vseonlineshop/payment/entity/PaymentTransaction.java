@@ -25,6 +25,9 @@ public class PaymentTransaction {
     @Column(name = "provider_transaction_id")
     private String providerTransactionId;
 
+    @Column(name = "captured_id")
+    private String captureId;
+
     @Column(name = "provider_status")
     private String providerStatus;
 

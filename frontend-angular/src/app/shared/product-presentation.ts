@@ -20,7 +20,7 @@ const categoryImages: Record<Exclude<FurnitureCategory, 'all'>, string> = {
 };
 
 export function furnitureCategory(product: Product): Exclude<FurnitureCategory, 'all'> {
-  const text = `${product.category ?? ''} ${product.name} ${product.description ?? ''} ${product.sku}`.toLowerCase();
+  const text = `${product.categoryName ?? ''} ${product.name} ${product.description ?? ''} ${product.sku}`.toLowerCase();
   if (/sofa|couch|lounge/.test(text)) return 'sofas';
   if (/chair|stuhl|seat|bench/.test(text)) return 'chairs';
   if (/table|desk|tisch/.test(text)) return 'tables';
@@ -35,7 +35,7 @@ export function furnitureCategoryLabel(product: Product): string {
 }
 
 export function furnitureImage(product: Product): string {
-  return product.imageUrl ?? categoryImages[furnitureCategory(product)];
+  return product.imageUrls?.[0] ?? categoryImages[furnitureCategory(product)];
 }
 
 export function furnitureImageStyle(product: Product): string {

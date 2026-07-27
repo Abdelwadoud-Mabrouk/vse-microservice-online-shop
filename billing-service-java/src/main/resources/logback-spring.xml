@@ -1,0 +1,122 @@
+<configuration>
+
+    <!-- =========================
+         File Logging
+         ========================= -->
+
+    <appender name="FILE"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+
+        <file>logs/billing-service.json</file>
+
+        <rollingPolicy
+                class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+
+            <fileNamePattern>
+                logs/billing-service.%d{yyyy-MM-dd}.json
+            </fileNamePattern>
+
+            <maxHistory>14</maxHistory>
+
+        </rollingPolicy>
+
+
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+
+            <providers>
+
+                <!-- ISO-8601 UTC Timestamp -->
+                <timestamp>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+
+
+                <!-- Level INFO/WARN/ERROR -->
+                <logLevel/>
+
+
+                <!-- Logger Klasse -->
+                <loggerName/>
+
+
+                <!-- Service Name -->
+                <globalCustomFields>
+                    {"service":"billing-service"}
+                </globalCustomFields>
+
+
+                <!-- Message -->
+                <message/>
+
+
+                <!-- MDC enthält correlationId -->
+                <mdc/>
+
+
+                <!-- kv() aus StructuredArguments -->
+                <arguments/>
+
+                <!-- Exception Stacktrace -->
+                <stackTrace/>
+
+            </providers>
+
+        </encoder>
+
+    </appender>
+
+
+
+    <!-- =========================
+         Console Logging
+         ========================= -->
+
+    <appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender">
+
+
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+
+            <providers>
+
+                <timestamp>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+
+                <logLevel/>
+
+                <globalCustomFields>
+                    {"service":"billing-service"}
+                </globalCustomFields>
+
+
+                <message/>
+
+                <mdc/>
+
+                <arguments/>
+
+                <stackTrace/>
+
+            </providers>
+
+        </encoder>
+
+    </appender>
+
+
+
+    <!-- =========================
+         Root Logger
+         ========================= -->
+
+    <root level="INFO">
+
+        <appender-ref ref="CONSOLE"/>
+
+        <appender-ref ref="FILE"/>
+
+    </root>
+
+
+</configuration>

@@ -1,192 +1,74 @@
 package com.vseonlineshop.payment.service;
 
-import com.vseonlineshop.payment.dto.PaymentRequest;
-import com.vseonlineshop.payment.dto.PaymentResponse;
-import com.vseonlineshop.payment.dto.SmallProviderResponse;
-import com.vseonlineshop.payment.entity.Payment;
-import com.vseonlineshop.payment.entity.PaymentTransaction;
-import com.vseonlineshop.payment.enums.PaymentStatus;
-import com.vseonlineshop.payment.exception.PaymentSessionException;
-import com.vseonlineshop.payment.facade.PaymentPluginFacade;
-import com.vseonlineshop.payment.repository.PaymentRepository;
-import com.vseonlineshop.payment.repository.PaymentTransactionRepository;
+import com.vseonlineshop.payment.dto.*;
+import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.util.Optional;
+
 import java.util.UUID;
+
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
+
 public class PaymentService {
 
-    private final PaymentRepository paymentRepo;
-    private final PaymentTransactionRepository transactionRepo;
-    private final KafkaEventPublisher kafkaEventPublisher;
-    private final PaymentPluginFacade paymentFacade;
+    private final PaymentProcessService paymentProcessService;
 
 
-    public PaymentService(PaymentRepository paymentRepo, PaymentTransactionRepository transactionRepo, KafkaEventPublisher kafkaEventPublisher, PaymentPluginFacade paymentFacade) {
-        this.paymentRepo = paymentRepo;
-        this.transactionRepo = transactionRepo;
-        this.kafkaEventPublisher = kafkaEventPublisher;
-        this.paymentFacade = paymentFacade;
-    }
+    public PaymentResponse initiatePayment(PaymentRequest request, UUID correlationId) {
 
-
-    @Transactional
-    public PaymentResponse initiatePayment(PaymentRequest request) {
-
-        Optional<Payment> existingPayment =
-                paymentRepo.findByCorrelationId(request.correlationId());
-
-        if (existingPayment.isPresent()) {
-            return handleExistingPayment(existingPayment.get(), request);
-        }
-        Payment payment = createPendingPayment(request);
-
-        safePublish(() -> kafkaEventPublisher.publishPaymentCreated(payment));
-
-        return createCheckoutSession(payment, request, "SESSION_CREATED", true);
-    }
-
-    private PaymentResponse handleExistingPayment(Payment payment, PaymentRequest request) {
-        log.warn("Duplicate payment request, correlationId={}", request.correlationId());
-
-        if (payment.getStatus() != PaymentStatus.PENDING) {
-            return toResponse(payment);
-        }
-
-        log.info("Payment still PENDING. Requesting fresh checkout session.");
-
-        return createCheckoutSession(payment, request, "SESSION_RENEWED", false);
-    }
-
-    private PaymentResponse createCheckoutSession(
-            Payment payment,
-            PaymentRequest request,
-            String providerStatus,
-            boolean isNewPayment
-    ) {
-        try {
-            SmallProviderResponse providerResponse = paymentFacade.execute(request,payment.getPaymentId());
-
-            saveTransaction(
-                    payment,
-                    providerResponse.providerTransactionId(),
-                    providerStatus,
-                    null,
-                    providerResponse.rawResponse(),
-                    0
-            );
-
-            // Rückgabe an den Controller mit dem Builder
-            return PaymentResponse.builder()
-                    .paymentId(payment.getPaymentId())
-                    .orderId(payment.getOrderId())
-                    .correlationId(payment.getCorrelationId())
-                    .status(payment.getStatus())
-                    .approvalUrl(providerResponse.approvalUrl())
-                    .paidAt(payment.getPaidAt())
-                    .build();
-
-        } catch (Exception ex) {
-            return handleProviderFailureIsolated(payment.getPaymentId(), ex, isNewPayment);
-        }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public PaymentResponse handleProviderFailureIsolated(UUID paymentId, Exception ex, boolean updatePaymentToFailed) {
-
-        Payment payment = paymentRepo.findById(paymentId)
-                .orElseThrow(() -> new IllegalStateException("Payment nicht gefunden: " + paymentId));
-
-        log.error("[PAYMENT] Provider session creation failed. paymentId={}, error={}",
-                paymentId, ex.getMessage());
-
-        if (updatePaymentToFailed) {
-            payment.setStatus(PaymentStatus.FAILED);
-            payment.setUpdatedAt(Instant.now());
-            paymentRepo.save(payment);
-        }
-
-        PaymentTransaction txn = saveTransaction(
-                payment,
-                null,
-                "PROVIDER_ERROR",
-                ex.getMessage(),
-                null,
-                0
+        MDC.put(
+                "correlationId",
+                correlationId.toString()
         );
 
-        // Event abschicken
-        if (updatePaymentToFailed) {
-            safePublish(() -> kafkaEventPublisher.publishPaymentFailed(payment, txn));
+        try {
+            PaymentRequest enrichedRequest =
+                    request.withCorrelationId(correlationId);
+
+
+            return paymentProcessService.processPayment(enrichedRequest);
+
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    public String processRefund(RefundRequestDto refundRequestDto, UUID correlationId) {
+        MDC.put(
+                "correlationId",
+                correlationId.toString()
+        );
+
+        try {
+            return paymentProcessService.processRefund(
+                    refundRequestDto,
+                    correlationId
+            );
+
+        } finally {
+            MDC.clear();
         }
 
-        throw new PaymentSessionException("Konnte Zahlungssitzung beim Provider nicht erstellen");
     }
 
-    // ── Helper: Entity → Response ──────────────────────────────────
-    private PaymentResponse toResponse(Payment payment) {
-        return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
-                .orderId(payment.getOrderId())
-                .correlationId(payment.getCorrelationId())
-                .status(payment.getStatus())
-                .paidAt(payment.getPaidAt())
-                .build();
-    }
+    public String getStatus(String transactionId, UUID correlationId) {
+        MDC.put(
+                "correlationId",
+                correlationId.toString()
+        );
 
-    // ── Helper: Transaction persistieren ──────────────────────────
-    private PaymentTransaction saveTransaction(Payment payment, String providerTxnId,
-                                               String providerStatus, String failureReason,
-                                               String rawResponse, Integer retryCount) {
-        PaymentTransaction txn = PaymentTransaction.builder()
-                .payment(payment)
-                .providerTransactionId(providerTxnId)
-                .providerStatus(providerStatus)
-                .failureReason(failureReason)
-                .rawResponse(rawResponse)
-                .retryCount(retryCount)
-                .build();
-        return transactionRepo.save(txn);
-    }
-
-    private Payment createPendingPayment(PaymentRequest request) {
-
-        Payment payment = Payment.builder()
-                .correlationId(request.correlationId())
-                .orderId(request.orderId())
-                .userId(request.userId())
-                .amount(request.totalAmount())
-                .currency(request.currency())
-                .paymentMethod(request.paymentMethod())
-                .status(PaymentStatus.PENDING)
-                .build();
-
-        paymentRepo.save(payment);
-
-        log.info("""
-                        [PAYMENT]
-                        Created paymentId={}
-                        status=PENDING
-                        """,
-                payment.getPaymentId());
-
-        return payment;
-    }
-
-    // Kafka fire & forget — Exception darf Payment-Flow nicht brechen!
-    private void safePublish(Runnable publishAction) {
         try {
-            publishAction.run();
-        } catch (Exception e) {
-            // todo: Wie können wir damit umgehen, damit wir die Nachvollziehbarkeit nicht verlieren können : Transactional Outbox Pattern.
-            log.error("[Kafka] Event konnte nicht gesendet werden: {}", e.getMessage(), e);
+
+            return paymentProcessService.getStatus(transactionId);
+
+        } finally {
+            MDC.clear();
         }
     }
 }

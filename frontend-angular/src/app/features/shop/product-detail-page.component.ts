@@ -1,8 +1,9 @@
-import { Component, Input } from '@angular/core';
+/*
+import {Component, inject, Input} from '@angular/core';
 import { AsyncPipe, CurrencyPipe } from '@angular/common';
-import { ShopApiService } from '../../core/api/shop-api.service';
 import { CartService } from './cart.service';
 import { Product } from '../../core/models/product.model';
+import {ProductServiceService} from "../../core/service/product-service.service";
 import { furnitureCategoryLabel, furnitureImageStyle } from '../../shared/product-presentation';
 
 @Component({
@@ -26,7 +27,7 @@ import { furnitureCategoryLabel, furnitureImageStyle } from '../../shared/produc
           <div class="detail-price-row">
             <div>
               <span class="metric-label">Price</span>
-              <strong class="price">{{ product.price | currency: product.currency ?? 'EUR' }}</strong>
+              <strong class="price">{{ product.price | currency: product.categoryName ?? 'EUR' }}</strong>
             </div>
             <span class="status-chip success">Available</span>
           </div>
@@ -46,11 +47,11 @@ import { furnitureCategoryLabel, furnitureImageStyle } from '../../shared/produc
 export class ProductDetailPageComponent {
   @Input() id = '';
   get product$() {
-    return this.shopApi.getProduct(this.id);
+    return this.productServiceService.getProduct(this.id);
   }
 
   constructor(
-    private readonly shopApi: ShopApiService,
+    private readonly productServiceService: ProductServiceService,
     private readonly cart: CartService
   ) {}
 
@@ -66,3 +67,4 @@ export class ProductDetailPageComponent {
     return furnitureImageStyle(product);
   }
 }
+*/

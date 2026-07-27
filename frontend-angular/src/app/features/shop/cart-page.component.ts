@@ -19,7 +19,7 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
 
     <section class="cart-layout">
       <div class="panel cart-panel">
-        @for (item of cart.items(); track item.product.productId) {
+        @for (item of cart.items(); track item.product.id) {
           <div class="cart-row">
             <div>
               <strong>{{ item.product.name }}</strong>
@@ -31,11 +31,13 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
                 type="number"
                 min="1"
                 [value]="item.quantity"
-                (change)="update(item.product.productId, $any($event.target).valueAsNumber)"
+                (change)="update(item.product.id, $any($event.target).valueAsNumber)"
               />
             </label>
-            <span>{{ item.product.price * item.quantity | currency: item.product.currency ?? 'EUR' }}</span>
-            <button type="button" class="ghost-button" (click)="cart.remove(item.product.productId)">Remove</button>
+            <div class="line-total">
+              {{ item.product.price * item.quantity | currency:'EUR' }}
+            </div>
+            <button type="button" class="ghost-button" (click)="cart.remove(item.product.id)">Remove</button>
           </div>
         } @empty {
           <div class="empty-state empty-cart">
@@ -56,7 +58,19 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
           <span>Total</span>
           <strong>{{ cart.total() | currency: 'EUR' }}</strong>
         </div>
-        <a routerLink="/shop/checkout" class="primary-button" [class.disabled-link]="cart.count() === 0">Checkout</a>
+        @if (cart.count() > 0) {
+
+          <a routerLink="/shop/checkout" class="primary-button">
+            Checkout
+          </a>
+
+        } @else {
+
+          <button disabled class="primary-button">
+            Checkout
+          </button>
+
+        }
         <small>Cart is temporary UI state. Checkout persists the order in the backend.</small>
       </aside>
     </section>

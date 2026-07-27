@@ -13,8 +13,11 @@ public class KafkaConfig {
     @Value("${kafka.topics.payment}")
     private String paymentTopic;
 
-    @Value("${kafka.topics.alerts}")
-    private String alertTopic;
+    @Value("${kafka.topics.alerts.system}")
+    private String alertSystemTopic;
+
+    @Value("${kafka.topics.alerts.security}")
+    private String alertSycurityTopic;
 
     @Bean
     public NewTopic paymentCreatedTopic() {
@@ -23,6 +26,11 @@ public class KafkaConfig {
 
     @Bean
     public NewTopic systemAlertCreatedTopic() {
-        return TopicBuilder.name(alertTopic).partitions(1).replicas(1).build();
+        return TopicBuilder.name(alertSystemTopic).partitions(1).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic sycurityAlertCreatedTopic() {
+        return TopicBuilder.name(alertSycurityTopic).partitions(1).replicas(1).build();
     }
 }

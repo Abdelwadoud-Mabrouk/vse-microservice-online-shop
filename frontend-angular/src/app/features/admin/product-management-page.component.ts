@@ -21,12 +21,12 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
       <div class="table table-head">
         <span>SKU</span><span>Name</span><span>Price</span><span>Action</span>
       </div>
-      @for (product of products$ | async; track product.productId) {
+      @for (product of products$ | async; track product.id) {
         <div class="table table-row">
           <span>{{ product.sku }}</span>
           <span>{{ product.name }}</span>
-          <span>{{ product.price | currency: product.currency ?? 'EUR' }}</span>
-          <a [routerLink]="['/admin/products', product.productId, 'edit']">Edit</a>
+          <span>{{ product.price | currency: 'EUR' ?? 'EUR' }}</span>
+          <a [routerLink]="['/admin/products', product.id, 'edit']">Edit</a>
         </div>
       }
     </section>

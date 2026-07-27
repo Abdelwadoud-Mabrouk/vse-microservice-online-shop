@@ -1,13 +1,15 @@
 package com.vseonlineshop.shopservice.service.shop;
 
 import com.vseonlineshop.shopservice.domain.*;
+import com.vseonlineshop.shopservice.dto.order.request.CustomerInformationRequest;
+import com.vseonlineshop.shopservice.dto.order.request.ItemRequest;
+import com.vseonlineshop.shopservice.dto.order.request.OrderRequest;
+import com.vseonlineshop.shopservice.dto.order.request.ShippingAddressRequest;
+import com.vseonlineshop.shopservice.dto.order.response.CheckoutResponse;
 import com.vseonlineshop.shopservice.dto.payment.PaymentResponse;
-import com.vseonlineshop.shopservice.dto.shop.ItemRequest;
-import com.vseonlineshop.shopservice.dto.shop.OrderItemResponse;
-import com.vseonlineshop.shopservice.dto.shop.OrderRequest;
-import com.vseonlineshop.shopservice.dto.shop.OrderResponse;
+import com.vseonlineshop.shopservice.product.domain.Product;
+import com.vseonlineshop.shopservice.product.repository.ProductRepository;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
-import com.vseonlineshop.shopservice.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,24 +27,24 @@ public class OrderTransactionHelper {
     private final ProductRepository productRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order createInitialOrder(OrderRequest request) {
-        UUID correlationId = UUID.randomUUID();
+    public Order createInitialOrder(OrderRequest request, UUID correlationId) {
         Order order = buildInitialOrder(request, correlationId);
         return orderRepository.save(order);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order updateToProcessing(UUID orderId, BigDecimal total, UUID reservationId) {
-        Order order = orderRepository.findById(orderId).orElseThrow();
-        order.setTotalAmount(total);
-        order.setStatus(OrderStatus.PROCESSING);
-        order.setReservationId(reservationId);
-        order.setUpdatedAt(LocalDateTime.now());
-        return orderRepository.save(order);
+    public Order updateToProcessing(Order order, UUID reservationId) {
+        Order orderDb = orderRepository.findById(order.getId()).orElseThrow();
+        BigDecimal total = calculateTotal(orderDb.getItems());
+        orderDb.setTotalAmount(total);
+        orderDb.setStatus(OrderStatus.PROCESSING);
+        orderDb.setReservationId(reservationId);
+        orderDb.setUpdatedAt(LocalDateTime.now());
+        return orderRepository.save(orderDb);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public OrderResponse updateToAwaitingPayment(UUID orderId, PaymentResponse payment) {
+    public CheckoutResponse updateToAwaitingPayment(UUID orderId, PaymentResponse payment) {
         Order order = orderRepository.findById(orderId).orElseThrow();
         order.setStatus(OrderStatus.AWAITING_PAYMENT);
         order.setPaymentId(payment.paymentId().toString());
@@ -51,15 +53,48 @@ public class OrderTransactionHelper {
         return toResponse(order, payment.approvalUrl());
     }
 
+    public BigDecimal calculateTotal(List<OrderItem> items) {
+        return items.stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private CustomerInformation toCustomer(CustomerInformationRequest request) {
+
+        CustomerInformation customer = new CustomerInformation();
+
+        customer.setFirstName(request.firstName());
+        customer.setLastName(request.lastName());
+        customer.setEmail(request.email());
+        customer.setPhone(request.phone());
+
+        return customer;
+    }
+
+    private ShippingAddress toShippingAddress(ShippingAddressRequest request) {
+
+        ShippingAddress address = new ShippingAddress();
+
+        address.setStreet(request.street());
+        address.setHouseNumber(request.houseNumber());
+        address.setPostalCode(request.postalCode());
+        address.setCity(request.city());
+        address.setCountry(request.country());
+
+        return address;
+    }
+
     private Order buildInitialOrder(OrderRequest request, UUID correlationId) {
 
         Order order = new Order();
         order.setCorrelationId(correlationId);
-        order.setUserId(request.userId());
         order.setCurrency(request.currency());
         order.setPaymentMethod(request.paymentMethod());
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(BigDecimal.ZERO);
+
+        order.setCustomer(toCustomer(request.customer()));
+        order.setShippingAddress(toShippingAddress(request.shippingAddress()));
 
         BigDecimal orderTotal = BigDecimal.ZERO;
 
@@ -99,32 +134,13 @@ public class OrderTransactionHelper {
     }
 
 
-    private OrderResponse toResponse(Order order, String url) {
-        List<OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getProductName(),
-                        item.getQuantity(),
-                        item.getPricePerUnit(),
-                        item.getSubTotal(),
-                        item.getTaxRate(),
-                        item.getTaxAmount(),
-                        item.getTotalPrice()
-                ))
-                .toList();
-
-        return new OrderResponse(
+    private CheckoutResponse toResponse(Order order, String approvalUrl) {
+        return new CheckoutResponse(
                 order.getId(),
-                order.getUserId(),
-                order.getPaymentId(),
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCurrency(),
-                order.getPaymentMethod(),
-                itemResponses,
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                url
+                approvalUrl
         );
     }
 }

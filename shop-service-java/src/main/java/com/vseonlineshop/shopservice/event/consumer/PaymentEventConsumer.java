@@ -4,6 +4,7 @@ package com.vseonlineshop.shopservice.event.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.domain.OrderStatus;
+import com.vseonlineshop.shopservice.dto.payment.RefundResponseDto;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
 import com.vseonlineshop.shopservice.dto.warehouse.ReservationResponse;
 import com.vseonlineshop.shopservice.event.dtos.DomainEvent;
@@ -12,6 +13,7 @@ import com.vseonlineshop.shopservice.event.dtos.payment.PaymentSucceededPayload;
 import com.vseonlineshop.shopservice.event.dtos.system.SystemAlertPayload;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import com.vseonlineshop.shopservice.event.producer.KafkaEventPublisher;
+import com.vseonlineshop.shopservice.service.client.BillingService;
 import com.vseonlineshop.shopservice.service.client.WarehouseClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -34,6 +38,8 @@ public class PaymentEventConsumer {
     private final KafkaEventPublisher kafkaEventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final WarehouseClient warehouseClient;
+    private final BillingService paymentClient;
+
 
     /**
      * Hört auf das Payment-Topic und fängt die asynchrone Erfolgsmeldung ab.
@@ -47,8 +53,16 @@ public class PaymentEventConsumer {
     public void onPaymentEvent(ConsumerRecord<String, DomainEvent<Object>> record) {
         DomainEvent<?> domainEvent = record.value();
 
-        log.info("[Kafka-Consumer] Event empfangen. Typ: {}, Source: {}, CorrelationId: {}",
-                domainEvent.eventType(), domainEvent.service(), domainEvent.correlationId());
+        log.info(
+                "Kafka Event empfangen",
+                kv("correlationId", domainEvent.correlationId()),
+                kv("service", "shop-service"),
+                kv("context", Map.of(
+                        "eventType", domainEvent.eventType(),
+                        "sourceService", domainEvent.service()
+                ))
+        );
+
 
         if ("PAYMENT_SUCCEEDED".equalsIgnoreCase(domainEvent.eventType())) {
             handlePaymentSucceeded(domainEvent);
@@ -58,6 +72,7 @@ public class PaymentEventConsumer {
         }
     }
 
+
     private void handlePaymentSucceeded(DomainEvent<?> domainEvent) {
         Order order = null;
         try {
@@ -66,42 +81,107 @@ public class PaymentEventConsumer {
                     PaymentSucceededPayload.class
             );
 
-            log.info("[Kafka-Consumer] Verarbeitung PAYMENT_SUCCEEDED für OrderId={}", payload.orderId());
+            log.info(
+                    "PAYMENT_SUCCEEDED Event wird verarbeitet",
+                    kv("correlationId", domainEvent.correlationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", payload.orderId(),
+                            "eventType", domainEvent.eventType()
+                    ))
+            );
 
             order = orderRepository.findById(payload.orderId())
-                    .orElseThrow(() -> new IllegalStateException("Order nicht gefunden für ID: " + payload.orderId()));
+                    .orElseThrow(() -> new IllegalStateException("Order not found for ID: " + payload.orderId()));
 
-            if (order.getStatus() == OrderStatus.COMPLETED) {
-                log.warn("[Kafka-Consumer] Order {} ist bereits COMPLETED. Event wird ignoriert.", order.getId());
+            // Idempotency check
+            if (order.getStatus() == OrderStatus.COMPLETED || order.getStatus() == OrderStatus.ROLLBACK_COMPLETED) {
+                log.warn(
+                        "Order bereits final - Event ignoriert",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "status", order.getStatus()
+                        ))
+                );
                 return;
             }
 
-            order.setStatus(OrderStatus.COMPLETED);
             order.setPaymentId(payload.paymentId().toString());
             orderRepository.save(order);
 
             // STEP 2: Warehouse reservieren
-            ReservationCommitedResponse reservationCommitedResponse = null;
+            ReservationCommitedResponse commitResponse = null;
             try {
-                reservationCommitedResponse = warehouseClient.reservationCommited(order);
+                commitResponse = warehouseClient.reservationCommited(order);
             } catch (RestClientException ex) {
-                log.error("[WAREHOUSE ERROR] Warehouse unreachable for Order {}", order.getId(), ex);
-                systemAlert(order, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
+
+                log.error(
+                        "Warehouse Commit fehlgeschlagen - starte Refund Compensation",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "errorMessage", ex.getMessage()
+                        )),
+                        ex
+                );
+
+                handleDispatchFailed(order, "WAREHOUSE_COMMIT_FAILED");
+                return;
             }
 
-            // Safe Check to Reservation
-            if (reservationCommitedResponse == null || !reservationCommitedResponse.orderId().equals(order.getId()) || !reservationCommitedResponse.correlationId().equals(order.getCorrelationId()) || !reservationCommitedResponse.status().equalsIgnoreCase("Committed")) {
-                systemAlert(order, "RESERVATION NOT COMMITED", null);
+            // Safety check: was dispatch really successful
+            if (commitResponse == null
+                    || !commitResponse.orderId().equals(order.getId())
+                    || !commitResponse.correlationId().equals(order.getCorrelationId())
+                    || !commitResponse.status().equalsIgnoreCase("COMMITTED")) {
+
+                log.error(
+                        "Unerwartete Warehouse Commit Antwort",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "commitResponse", String.valueOf(commitResponse)
+                        ))
+                );
+                handleDispatchFailed(order, "DESPATCH_FAILED");
+                return;
             }
 
-            log.info("[Kafka-Consumer] Order {} erfolgreich auf COMPLETED aktualisiert.", order.getId());
+
+            order.setStatus(OrderStatus.COMPLETED);
+            orderRepository.save(order);
+
+            log.info(
+                    "Order erfolgreich abgeschlossen",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", OrderStatus.COMPLETED
+                    ))
+            );
 
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCompleted(finalOrder));
 
-
         } catch (Exception ex) {
-            log.error("[Kafka-Consumer ERROR] Fehler beim Verarbeiten des Zahlungs-Events: {}", ex.getMessage(), ex);
+            log.error(
+                    "Fehler beim Verarbeiten von PAYMENT_SUCCEEDED",
+                    kv(
+                            "correlationId",
+                            order != null ? order.getCorrelationId() : domainEvent.correlationId()
+                    ),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order != null ? order.getId() : "N/A",
+                            "errorMessage", ex.getMessage()
+                    )),
+                    ex
+            );
 
             Map<String, String> metadata = Map.of(
                     "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
@@ -112,13 +192,67 @@ public class PaymentEventConsumer {
                     UUID.randomUUID().toString(),
                     "shop-service",
                     order != null ? order.getId().toString() : "N/A",
-                    "Kritischer Ausfall! Grund: " + ex.getMessage(),
+                    "Critical failure! Reason: " + ex.getMessage(),
                     Instant.now(),
                     metadata
             );
 
             Order finalOrder1 = order;
             safePublish(() -> kafkaEventPublisher.publishSystemAlert(finalOrder1, alertPayload));
+        }
+    }
+
+    private void handleDispatchFailed(Order order, String reason) {
+        log.warn(
+                "Warehouse Dispatch fehlgeschlagen - starte Compensation",
+                kv("correlationId", order.getCorrelationId()),
+                kv("service", "shop-service"),
+                kv("context", Map.of(
+                        "orderId", order.getId(),
+                        "reason", reason
+                ))
+        );
+
+
+        safePublish(() -> kafkaEventPublisher.publishWarehouseDispatchFailed(order, reason));
+        try {
+            RefundResponseDto refundResponse = paymentClient.refund(order);
+
+            order.setStatus(OrderStatus.ROLLBACK_COMPLETED);
+            orderRepository.save(order);
+
+            log.info(
+                    "Refund erfolgreich - Order Rollback abgeschlossen",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "refundTransactionId", refundResponse.providerRefundTransactionId(),
+                            "reason", reason
+                    ))
+            );
+
+            safePublish(() -> kafkaEventPublisher.publishOrderRollbackCompleted(order, refundResponse, reason));
+
+        } catch (Exception refundEx) {
+            log.error(
+                    "Refund beim Billing-Service fehlgeschlagen",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "reason", reason,
+                            "errorMessage", refundEx.getMessage()
+                    )),
+                    refundEx
+            );
+
+            order.setStatus(OrderStatus.REFUND_PENDING);
+            orderRepository.save(order);
+
+
+            systemAlert(order, "REFUND_FAILED_MANUAL_INTERVENTION_NEEDED", refundEx);
         }
     }
 
@@ -130,44 +264,114 @@ public class PaymentEventConsumer {
                     PaymentFailedPayload.class
             );
 
-            log.info("[Kafka-Consumer] Verarbeitung PAYMENT_FAILED für OrderId={}", payload.orderId());
+            log.info(
+                    "PAYMENT_FAILED Event wird verarbeitet",
+                    kv("correlationId", domainEvent.correlationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "eventType", domainEvent.eventType(),
+                            "orderId", payload.orderId()
+                    ))
+            );
+
 
             order = orderRepository.findById(payload.orderId())
                     .orElseThrow(() -> new IllegalStateException("Order nicht gefunden für ID: " + payload.orderId()));
 
-            if (order.getStatus() == OrderStatus.CANCELLED) {
-                log.warn("[Kafka-Consumer] Order {} ist bereits CANCELED. Event wird ignoriert.", order.getId());
+            if (order.getStatus() == OrderStatus.PAYMENT_FAILED
+                    || order.getStatus() == OrderStatus.COMPLETED
+                    || order.getStatus() == OrderStatus.ROLLBACK_COMPLETED) {
+                log.warn(
+                        "PAYMENT_FAILED Event ignoriert - Order bereits final",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "currentStatus", order.getStatus()
+                        ))
+                );
+
                 return;
             }
 
-            order.setStatus(OrderStatus.CANCELLED);
+            order.setStatus(OrderStatus.PAYMENT_FAILED);
             order.setPaymentId(payload.paymentId().toString());
             orderRepository.save(order);
 
-            log.info("[Kafka-Consumer] Order {} erfolgreich auf CANCELED aktualisiert.", order.getId());
+            log.info(
+                    "Order Status auf PAYMENT_FAILED gesetzt",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus()
+                    ))
+            );
 
             Order finalOrder = order;
             safePublish(() -> kafkaEventPublisher.publishOrderCancelled(finalOrder, payload.failureReason()));
 
-            // Reales Reservations
 
             log.info(
-                    "[OrderService] Triggering warehouse reservation rollback. reservationId={}, orderId={}",
-                    order.getReservationId(),
-                    order.getId());
+                    "Warehouse Reservation Rollback gestartet",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "reservationId",
+                            order.getReservationId() != null
+                                    ? order.getReservationId()
+                                    : "N/A"
+                    ))
+            );
 
             safePublish(() -> kafkaEventPublisher.publishReservationRollbackRequested(finalOrder));
 
-            ReservationResponse response = warehouseClient.cancelReservation(order);
+            ReservationResponse response = null;
+            try {
+                response = warehouseClient.cancelReservation(order);
 
-            log.info(
-                    "[WarehouseClient] Reservation cancelled successfully. reservationId={}, orderId={}, status={}",
-                    response.reservationId(),
-                    response.orderId(),
-                    response.status());
+                log.info(
+                        "[WarehouseClient] Reservation cancelled successfully. reservationId={}, orderId={}, status={}",
+                        response.reservationId(),
+                        response.orderId(),
+                        response.status());
+            } catch (RestClientException ex) {
+
+                assert response != null;
+                log.info(
+                        "Warehouse Reservation erfolgreich freigegeben",
+                        kv("correlationId", order.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", Map.of(
+                                "orderId", order.getId(),
+                                "reservationId", order.getCorrelationId(),
+                                "status", response.status()
+                        ))
+                );
+                systemAlert(order, "RESERVATION_RELEASE_FAILED", ex);
+            }
 
         } catch (Exception ex) {
-            log.error("[Kafka-Consumer ERROR] Fehler beim Verarbeiten des Zahlungs-Events: {}", ex.getMessage(), ex);
+            log.error(
+                    "Fehler bei Verarbeitung von PAYMENT_FAILED Event",
+                    kv(
+                            "correlationId",
+                            order != null
+                                    ? order.getCorrelationId()
+                                    : domainEvent.correlationId()
+                    ),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId",
+                            order != null
+                                    ? order.getId()
+                                    : "N/A",
+                            "errorMessage",
+                            ex.getMessage()
+                    )),
+                    ex
+            );
             systemAlert(order, "INTERNAL_ERROR", ex);
         }
     }
@@ -195,7 +399,7 @@ public class PaymentEventConsumer {
         try {
             publishAction.run();
         } catch (Exception e) {
-            log.error("[Kafka-Consumer] Konnte folgendes OrderCompleted-Event nicht absenden: {}", e.getMessage());
+            log.error("Kafka Event konnte nicht gesendet werden", kv("service", "shop-service"), kv("context", Map.of("errorMessage", e.getMessage())), e);
         }
     }
 
