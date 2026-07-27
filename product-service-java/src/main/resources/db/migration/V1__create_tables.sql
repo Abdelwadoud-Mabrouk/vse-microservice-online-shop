@@ -40,6 +40,8 @@ CREATE TABLE products (
                           created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
                           updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
                           version BIGINT NOT NULL DEFAULT 0,
+                          stock_quantity INTEGER  NOT NULL DEFAULT 0,
+                          brand VARCHAR(255),
 
                           CONSTRAINT fk_product_category FOREIGN KEY (category_id)
                               REFERENCES categories (id) ON DELETE RESTRICT

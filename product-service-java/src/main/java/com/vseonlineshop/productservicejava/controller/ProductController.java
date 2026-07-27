@@ -4,6 +4,7 @@ package com.vseonlineshop.productservicejava.controller;
 import com.vseonlineshop.productservicejava.dto.ProductFilter;
 import com.vseonlineshop.productservicejava.dto.ProductResponse;
 import com.vseonlineshop.productservicejava.service.ProductService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,10 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+
+    // toDo: Shop anpassen ==> Add Table of prodcuts + kafka
+    //       Angular: Herro Page: All Prodcuten listen (Pagin), Filer mit Categorie, Header anapssen
+
 
 
     // ==========================================================
@@ -177,8 +182,12 @@ public class ProductController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> getProductById(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            HttpServletRequest request
     ) {
+        System.out.println("PRODUCT REQUEST: " + id);
+        System.out.println("FROM IP: " + request.getRemoteAddr());
+        System.out.println("USER AGENT: " + request.getHeader("User-Agent"));
 
         return ResponseEntity.ok(
                 productService.getProductById(id)

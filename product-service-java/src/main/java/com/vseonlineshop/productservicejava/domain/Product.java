@@ -71,4 +71,9 @@ public class Product {
 
     @Version
     private Long version;
+
+    @Column(nullable = false,name="stock_quantity")
+    private Integer stockQuantity = 0;
+
+    private String brand;
 }
