@@ -1,0 +1,526 @@
+% Abdelwadoud Mabrouk
+\documentclass[
+  11pt,
+  a4paper,
+  oneside,
+  headings=normal,
+  parskip=half,
+  DIV=12
+]{scrreprt}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{csquotes}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{scrlayer-scrpage}
+\usepackage[backend=biber,style=numeric]{biblatex}
+
+\addbibresource{literatur.bib}
+
+\geometry{left=3cm,right=2.5cm,top=2.7cm,bottom=2.7cm}
+\onehalfspacing
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black,
+  pdftitle={Wartbare, erweiterbare und nachvollziehbare Microservice-Architektur am Beispiel eines Möbel-Online-Shops},
+  pdfauthor={Abdelwadoud Mabrouk, Mohammed Amine Grioui}
+}
+
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ihead{Möbel-Online-Shop -- Abschlussbericht}
+\ohead{\headmark}
+\cfoot{\pagemark}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{220,220,220}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  captionpos=b
+}
+
+\newcommand{\projektname}{Microservice-orientierter Möbel-Online-Shop}
+\newcommand{\frontendname}{WohnWerk}
+\newcommand{\modulname}{Vertiefung Software Engineering}
+\newcommand{\hochschule}{Fachhochschule Südwestfalen}
+\newcommand{\semester}{Sommersemester 2026}
+\newcommand{\autoreneins}{Abdelwadoud Mabrouk}
+\newcommand{\autorenzwei}{Mohammed Amine Grioui}
+
+\begin{document}
+
+% -------------------------------------------------
+% Titelseite
+% -------------------------------------------------
+\begin{titlepage}
+  \centering
+  {\Large \hochschule \par}
+  \vspace{0.7cm}
+  {\large Fachbereich Informatik und Naturwissenschaften \par}
+  \vspace{1.8cm}
+
+  {\LARGE \textbf{Abschlussbericht} \par}
+  \vspace{0.5cm}
+  {\Large im Modul \modulname \par}
+  \vspace{1.5cm}
+
+  {\huge \textbf{Wartbare, erweiterbare und nachvollziehbare} \par}
+  \vspace{0.2cm}
+  {\huge \textbf{Microservice-Architektur am Beispiel eines Möbel-Online-Shops} \par}
+  \vspace{1.5cm}
+
+  \begin{tabular}{ll}
+    Projekt: & \projektname \\
+    Frontend: & \frontendname \\
+    Semester: & \semester \\
+    Autoren: & \autoreneins, \autorenzwei \\
+    Abgabedatum: & 6. September 2026
+  \end{tabular}
+
+  \vfill
+  \IfFileExists{logo_Hochschule.png}{\includegraphics[width=0.22\textwidth]{logo_Hochschule.png}}{}
+\end{titlepage}
+
+% -------------------------------------------------
+% Verzeichnisse
+% -------------------------------------------------
+\pagenumbering{Roman}
+\tableofcontents
+\clearpage
+\listoffigures
+\clearpage
+\listoftables
+\clearpage
+
+\pagenumbering{arabic}
+
+% -------------------------------------------------
+% Kurzfassung
+% -------------------------------------------------
+\chapter*{Kurzfassung}
+\addcontentsline{toc}{chapter}{Kurzfassung}
+In diesem Bericht wird ein verteilter Möbel-Online-Shop beschrieben. Das Projekt verfolgt das Ziel, einen Bestellprozess fachlich nachvollziehbar, technisch wartbar und sinnvoll erweiterbar umzusetzen. Dafür wurde eine Microservice-Architektur gewählt, bei der die Verantwortlichkeiten bewusst getrennt sind. Der Shop-Service verwaltet Produkte, Preise und Bestellungen. Der Billing-Service verarbeitet Zahlungen. Der Warehouse-Service verwaltet Lagerbestand und Reservierungen. Der Invoice-Service erzeugt Rechnungen und speichert diese als Dateien. Der Audit-Service sammelt die fachliche Historie aller wichtigen Ereignisse.
+
+Ergänzend zu den Backend-Services wurde eine Angular-Anwendung umgesetzt. Diese Anwendung bildet eine gemeinsame Benutzeroberfläche für Kundinnen und Kunden, Admin-Funktionen, Lagerverwaltung und technische Beobachtbarkeit. Das Frontend ist bewusst als UI-Schicht gestaltet. Es besitzt keine fachlich kritischen Daten dauerhaft, sondern ruft die zuständigen Backend-Services über APIs auf.
+
+Die Kommunikation im System kombiniert REST und Kafka. REST wird eingesetzt, wenn eine sofortige Antwort benötigt wird, zum Beispiel bei der Lagerreservierung. Kafka wird für asynchrone Ereignisse und die entkoppelte Weiterverarbeitung verwendet. Durch die Trennung von Datenhoheit, Ereignisfluss und Benutzeroberfläche entsteht ein System, das für ein Hochschulprojekt realistisch bleibt und gleichzeitig wichtige Architekturprinzipien moderner Softwareentwicklung zeigt.
+
+\clearpage
+
+% -------------------------------------------------
+% 1 Einleitung
+% -------------------------------------------------
+\chapter{Einleitung}
+\section{Problemstellung}
+Online-Shops bestehen in der Praxis selten nur aus einer einzigen Anwendung. Selbst ein scheinbar einfacher Kaufprozess umfasst mehrere fachliche Schritte: Produkte müssen angezeigt werden, Preise müssen korrekt sein, Lagerbestand muss reserviert werden, Zahlungen müssen verarbeitet werden und am Ende soll eine Rechnung entstehen. Zusätzlich muss im Fehlerfall nachvollziehbar bleiben, an welcher Stelle der Prozess abgebrochen wurde.
+
+Im Projekt wird dieser Zusammenhang am Beispiel eines Möbel-Shops umgesetzt. Die Domäne wurde bewusst konkret gewählt, weil ein Möbel-Shop typische E-Commerce-Funktionen gut sichtbar macht. Produkte wie Sofas, Stühle, Tische, Regale, Betten oder Lampen eignen sich für eine verständliche Produktpräsentation im Frontend und zugleich für eine klare technische Modellierung im Backend.
+
+\section{Ziel der Arbeit}
+Ziel dieser Arbeit ist es, die Architektur und Umsetzung des Projekts nachvollziehbar zu dokumentieren. Dabei geht es nicht nur darum, dass einzelne Services funktionieren. Wichtig ist vor allem, dass die Verantwortung der Services klar bleibt, dass der Bestellprozess erklärbar ist und dass Fehler im System sichtbar werden.
+
+Die Arbeit beschreibt daher:
+\begin{itemize}[leftmargin=1.4cm]
+  \item die fachliche Aufteilung der Services,
+  \item die Kommunikation über REST und Kafka,
+  \item die servicebezogene Datenhaltung,
+  \item das Angular-Frontend als gemeinsame UI,
+  \item die Audit-Timeline und technische Beobachtbarkeit,
+  \item die Test- und Qualitätssicherungsstrategie.
+\end{itemize}
+
+\section{Abgrenzung}
+Das Projekt ist als Hochschulprojekt umgesetzt. Es bildet zentrale Architektur- und Implementierungsaspekte ab, ersetzt aber keine produktionsreife Shop-Plattform. Themen wie vollständige Zahlungsanbieter-Zertifizierung, echte Benutzerregistrierung mit sicherem Identity Provider, umfassendes Rechtekonzept oder Hochverfügbarkeit werden nur so weit betrachtet, wie sie für das Verständnis der Architektur notwendig sind.
+
+\section{Aufgabenverteilung und Eigenleistung}
+Die Umsetzung erfolgte im Team. Abdelwadoud Mabrouk verantwortete schwerpunktmäßig die Architektur und Implementierung der .NET-Services sowie deren Integration in den Gesamtablauf. Dazu gehören der Warehouse-Service für Bestand und Reservierungen, der Invoice-Service für die ereignisgesteuerte Rechnungserstellung und der append-only arbeitende Audit-Service. Weitere Eigenleistungen waren die Entity-Framework-Migrationen, die Kafka-Anbindung und Vereinheitlichung der Event-Verträge, die .NET-End-to-End-Tests, die technische Architektur- und Betriebsdokumentation sowie die Umsetzung und Docker-Integration des Angular-Frontends. Die Java-basierten Shop- und Billing-Bestandteile wurden im Team integriert und über gemeinsam abgestimmte REST- und Kafka-Verträge angebunden.
+
+Die Aufteilung macht die individuelle Leistung nachvollziehbar, ohne die Integrationsarbeit als rein getrennte Einzelarbeit darzustellen. Insbesondere Event-Namen, Correlation-ID, Docker Compose und die Best-/Worst-Case-Abläufe mussten serviceübergreifend abgestimmt werden.
+
+% -------------------------------------------------
+% 2 Grundlagen
+% -------------------------------------------------
+\chapter{Grundlagen}
+\section{Microservices}
+Bei einer Microservice-Architektur wird ein System in mehrere kleine, fachlich geschnittene Services zerlegt. Jeder Service besitzt eine eigene Verantwortung und kann unabhängig weiterentwickelt werden \cite{fowlerMicroservices}. Für dieses Projekt ist dieser Ansatz passend, weil Bestellung, Zahlung, Lager, Rechnung und Audit unterschiedliche fachliche Aufgaben darstellen.
+
+Der Vorteil liegt in der klaren Trennung. Der Warehouse-Service muss zum Beispiel nicht wissen, wie eine Zahlung bei Stripe oder PayPal verarbeitet wird. Umgekehrt muss der Billing-Service nicht den Lagerbestand verwalten. Dadurch bleibt jeder Service leichter verständlich.
+
+\section{Clean Architecture}
+Clean Architecture beschreibt die Trennung zwischen fachlicher Logik und technischen Details \cite{cleanArchitecture}. Frameworks, Datenbanken oder Transportprotokolle sollen nicht direkt die fachlichen Regeln bestimmen. Im Projekt zeigt sich dieses Prinzip vor allem in den .NET-Services. Dort sind API-Endpunkte, Anwendungslogik, Domänenmodelle und Infrastruktur getrennt.
+
+\section{REST und Kafka}
+REST eignet sich für synchrone Kommunikation. Der aufrufende Service wartet auf eine Antwort und kann direkt weiterentscheiden. Kafka eignet sich für asynchrone Kommunikation \cite{apacheKafka}. Ein Service veröffentlicht ein Ereignis, andere Services können darauf reagieren, ohne dass der Sender die Empfänger direkt kennen muss.
+
+Im Projekt werden beide Ansätze kombiniert:
+\begin{itemize}
+  \item REST für direkte Entscheidungen, zum Beispiel Lagerreservierung.
+  \item Kafka für Ereignisse, Audit, Rechnungserstellung und entkoppelte Weiterverarbeitung.
+\end{itemize}
+
+\section{Append-only Audit}
+Der Audit-Service speichert fachliche Ereignisse nach dem Append-only-Prinzip. Einmal gespeicherte Audit-Einträge werden nicht verändert. Das ist wichtig, weil die Historie einer Bestellung nachvollziehbar bleiben soll. Gerade in verteilten Systemen ist diese Nachvollziehbarkeit ein zentraler Vorteil.
+
+% -------------------------------------------------
+% 3 Systemarchitektur
+% -------------------------------------------------
+\chapter{Systemarchitektur}
+\section{Gesamtüberblick}
+Das System besteht aus fünf fachlichen Services, einer Kafka-Infrastruktur, servicebezogenen Datenbanken und einem Angular-Frontend. Das Frontend trägt den Namen \frontendname{} und stellt den Möbel-Shop sowie interne Bereiche bereit. Der Shop-Service bleibt der wichtigste fachliche Einstiegspunkt für den Bestellprozess. Die weiteren Services übernehmen spezialisierte Aufgaben.
+
+\begin{figure}[H]
+  \centering
+  \IfFileExists{../images/system-context.png}
+    {\includegraphics[width=0.92\textwidth]{../images/system-context.png}}
+    {\fbox{\parbox{0.88\textwidth}{Hier kann das Systemkontextdiagramm eingefügt werden.}}}
+  \caption{Systemkontext des Möbel-Online-Shops}
+  \label{fig:systemkontext}
+\end{figure}
+
+\section{Services und Verantwortlichkeiten}
+\begin{table}[H]
+  \centering
+  \caption{Services und fachliche Aufgaben}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.6cm} X}
+    \toprule
+    \textbf{Service} & \textbf{Technik} & \textbf{Aufgabe} \\
+    \midrule
+    Shop-Service & Spring Boot, PostgreSQL & Verwaltung von Produkten, Preisen und Bestellungen. Orchestriert den Bestellprozess und ist fachlich der zentrale Einstiegspunkt. \\
+    Billing-Service & Spring Boot, PostgreSQL & Zahlungsabwicklung, Zahlungsstatus, Provider-Integration und Zahlungsereignisse. \\
+    Warehouse-Service & .NET 10, PostgreSQL & Verwaltung von Lagerbestand, Reservierungen, Commit und Freigabe von Bestand. \\
+    Invoice-Service & .NET 10, File-Storage & Erstellung und Speicherung von Rechnungsmetadaten und PDF-Dateien. \\
+    Audit-Service & .NET 10, PostgreSQL & Speicherung und Bereitstellung der fachlichen Ereignis-Timeline. \\
+    Angular-Frontend & Angular, Nginx & Gemeinsame Benutzeroberfläche für Shop, Customer, Admin, Warehouse und Observability. \\
+    Kafka & Infrastruktur & Verteilung asynchroner Ereignisse zwischen Services. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Datenhoheit}
+Ein wichtiges Architekturprinzip lautet: Jeder Service besitzt seine eigenen Daten. Das Frontend speichert keine geschäftskritischen Daten dauerhaft. Es zeigt Daten an und sendet Benutzeraktionen an die zuständigen Backend-Services.
+
+\begin{table}[H]
+  \centering
+  \caption{Datenhoheit im System}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4cm} X}
+    \toprule
+    \textbf{Datenart} & \textbf{Besitzender Service} \\
+    \midrule
+    Produkte und Preise & Shop-Service \\
+    Bestellungen und Bestellpositionen & Shop-Service \\
+    Zahlungsstatus und Transaktionen & Billing-Service \\
+    Lagerbestand und Reservierungen & Warehouse-Service \\
+    Rechnungen und PDF-Dokumente & Invoice-Service \\
+    Audit-Ereignisse und Timeline & Audit-Service \\
+    Warenkorb im Browser & Frontend, nur temporärer UI-State \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Kafka-Topics und Event-Fluss}
+Die Kafka-Kommunikation ist fachlich getrennt. Statt ein einziges allgemeines Topic für alle Ereignisse zu nutzen, werden mehrere Topics eingesetzt. Dadurch bleiben die Ereignisse nach Service- oder Fachbereich nachvollziehbar.
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{1.9cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.4cm}@{}}
+  \caption{Kafka-Topics und wichtige Events}\\
+  \toprule
+  \textbf{Topic} & \textbf{Events} & \textbf{Publisher} & \textbf{Zweck} \\
+  \midrule
+  \endfirsthead
+  \toprule
+  \textbf{Topic} & \textbf{Events} & \textbf{Publisher} & \textbf{Zweck} \\
+  \midrule
+  \endhead
+  orders & \path{ORDER_CREATED}, \path{ORDER_COMPLETED}, \path{ORDER_CANCELLED} & Shop-Service & Beschreibt den fachlichen Zustand einer Bestellung. \\
+  billing & \path{PAYMENT_INITIALIZED}, \path{PAYMENT_SUCCEEDED}, \path{PAYMENT_FAILED} & Billing-Service & Beschreibt den Zahlungsprozess. \\
+  warehouse & \path{WAREHOUSE_RESERVED}, \path{WAREHOUSE_COMMITTED}, \path{WAREHOUSE_OUT_OF_STOCK} & Warehouse-Service & Beschreibt Reservierung und Lagerstatus. \\
+  invoices & \path{INVOICE_CREATION_STARTED}, \path{INVOICE_CREATED}, \path{INVOICE_CREATION_FAILED} & Invoice-Service & Beschreibt die Rechnungserstellung. \\
+  \bottomrule
+\end{longtable}
+
+Der Audit-Service konsumiert alle fachlich relevanten Topics. Dadurch entsteht eine vollständige Timeline über mehrere Services hinweg.
+
+% -------------------------------------------------
+% 4 Frontend
+% -------------------------------------------------
+\chapter{Frontend mit Angular}
+\section{Ziel des Frontends}
+Das Frontend wurde als eine gemeinsame Angular-Anwendung umgesetzt. Ziel ist bewusst nicht, für jeden Service eine eigene kleine UI zu bauen. Stattdessen gibt es eine zentrale Anwendung mit klar getrennten Bereichen. Das ist für Präsentation, Wartbarkeit und Benutzerführung einfacher.
+
+Das Frontend ist als Möbel-Shop gestaltet. Die Oberfläche soll daher nicht wie ein technisches CRUD-Werkzeug wirken, sondern wie eine einfache, moderne E-Commerce-Anwendung. Produkte werden mit Möbelbildern, Kategorien, Preisen und Kurzbeschreibungen dargestellt.
+
+\section{Bereiche der Anwendung}
+\begin{table}[H]
+  \centering
+  \caption{Frontend-Bereiche}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.2cm} X}
+    \toprule
+    \textbf{Bereich} & \textbf{Aufgabe} \\
+    \midrule
+    Shop & Startbereich, Möbelkatalog, Kategorien, Produktdetail, Warenkorb, Checkout. \\
+    Customer & Kundenprofil, Adressen und eigene Bestellungen. \\
+    Admin & Bestellungen, Produkte, Preise, Audit-Timeline, Rechnungen und Systemstatus. \\
+    Warehouse & Lagerbestand, Stock-Update und Reservierungen. \\
+    Observability & Einstieg zu Grafana sowie Service- und Datenbankstatus. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Ordnerstruktur}
+Die Angular-Anwendung ist nach Verantwortlichkeiten getrennt. Die wichtigsten Ordner sind:
+
+\begin{lstlisting}[language={},caption={Frontend-Struktur}]
+frontend-angular/
+|- src/app/
+|  |- core/
+|  |  |- api/
+|  |  |- auth/
+|  |  |- layout/
+|  |  |- models/
+|  |- features/
+|  |  |- shop/
+|  |  |- customer/
+|  |  |- admin/
+|  |  |- warehouse/
+|  |  |- observability/
+|  |  |- auth/
+|  |- shared/
+|     |- components/
+|     |- product-presentation.ts
+|- Dockerfile
+|- nginx.conf
+\end{lstlisting}
+
+Diese Struktur ist für das Projekt ausreichend einfach, aber trotzdem erweiterbar. Fachliche Seiten liegen unter \texttt{features}. Wiederverwendbare Bausteine liegen unter \texttt{shared}. API-Zugriffe, Authentifizierung und Modelle liegen unter \texttt{core}.
+
+\section{UI-Design}
+Das Frontend verwendet eine ruhige Möbel-Shop-Gestaltung. Die Farbgebung ist bewusst warm und zurückhaltend. Große Produktbilder, klare Abstände und einfache Karten sollen den Shop professioneller wirken lassen. Die Navigation trennt Kundenfunktionen von internen Bereichen.
+
+Produktbilder werden zentral über eine Präsentationslogik organisiert. Wenn ein Backend-Produkt kein eigenes Bild enthält, wählt das Frontend anhand von Name, SKU oder Kategorie ein passendes Möbelbild aus. Dadurch bleibt die UI konsistent, ohne dass das Frontend fachlicher Datenbesitzer wird.
+
+\section{Authentifizierung und Rollen}
+Das Frontend enthält eine rollenbasierte Anmeldung. Für Customer und Warehouse ist diese bewusst als Demo-Mechanismus umgesetzt. Der Admin-Bereich verlangt zusätzlich die in der lokalen Umgebung konfigurierten Zugangsdaten. Ein HTTP-Interceptor sendet den daraus erzeugten Basic-Auth-Header ausschließlich an die Admin-API des Audit-Service; andere API-Aufrufe erhalten diese Zugangsdaten nicht. Es gibt Rollen für:
+\begin{itemize}
+  \item Customer,
+  \item Admin,
+  \item Warehouse.
+\end{itemize}
+
+Die Routen werden durch Guards geschützt. Admin- und Warehouse-Seiten sind nur sichtbar, wenn die passende Rolle aktiv ist. Serverseitig schützt eine Middleware den vollständigen Pfadbereich \texttt{/admin}; fehlende oder falsche Zugangsdaten führen zu HTTP~401. Für eine produktive Anwendung müsste die Demo-Rollenverwaltung später durch echte Authentifizierung mit einem Identity Provider ersetzt werden.
+
+\section{Observability im Frontend}
+Grafana wird nicht direkt in die Shop-Seiten eingebettet. Das wäre unübersichtlich und technisch stärker gekoppelt. Stattdessen gibt es eine eigene Observability-Seite. Dort kann Grafana geöffnet werden, außerdem werden Service- und Datenbankstatus angezeigt. So bleibt die technische Analyse klar vom Kaufprozess getrennt.
+
+% -------------------------------------------------
+% 5 Implementierung
+% -------------------------------------------------
+\chapter{Implementierung}
+\section{Bestellprozess}
+Der Bestellprozess beginnt im Shop-Service. Dort wird eine Bestellung angelegt und mit einer Correlation-ID versehen. Diese Correlation-ID begleitet den gesamten Prozess und ermöglicht später die fachliche Nachverfolgung in der Audit-Timeline.
+
+Vereinfacht läuft der Erfolgsfall so ab:
+\begin{enumerate}
+  \item Das Frontend sendet den Checkout an den Shop-Service.
+  \item Der Shop-Service legt die Bestellung an.
+  \item Der Warehouse-Service reserviert den Bestand.
+  \item Der Billing-Service verarbeitet die Zahlung.
+  \item Nach erfolgreicher Zahlung wird die Bestellung abgeschlossen.
+  \item Der Warehouse-Service bestätigt den endgültigen Lagerabgang.
+  \item Der Invoice-Service erstellt die Rechnung.
+  \item Der Audit-Service speichert die fachliche Timeline.
+\end{enumerate}
+
+\section{Fehlerfälle}
+Fehlerfälle sind ein wichtiger Teil des Projekts. Wenn zum Beispiel kein Bestand vorhanden ist, darf die Bestellung nicht einfach im unklaren Zustand bleiben. Das System erzeugt entsprechende Fehlerereignisse und dokumentiert diese im Audit. Auch fehlgeschlagene Zahlungen oder Probleme bei der Rechnungserstellung werden als Ereignisse sichtbar.
+
+\section{Invoice-Service}
+Der Invoice-Service erstellt Rechnungen nach Abschluss einer Bestellung. Die Dokumente werden im Dateisystem gespeichert. Zusätzlich werden Metadaten abgelegt, sodass Rechnungen gesucht und als PDF geöffnet werden können. Für das Frontend bedeutet das: Es zeigt Rechnungen und Download-Links an, besitzt die Rechnungen aber nicht selbst.
+
+\section{Warehouse-Service}
+Der Warehouse-Service verwaltet verfügbare Mengen und Reservierungen. Das Frontend stellt hierfür eigene Warehouse-Seiten bereit. Stock wird nicht im Admin-Dashboard vermischt, sondern über eigene Seiten gepflegt. Dadurch bleibt die Bedienung verständlicher: Admin ist für Verwaltung und Überblick zuständig, Warehouse für Bestand und Reservierungszustände.
+
+\section{Audit-Timeline}
+Die Audit-Timeline ist ein zentrales Werkzeug zur Nachvollziehbarkeit. Im Angular-Frontend gibt es dafür eine eigene Admin-Seite. Links werden vorhandene Correlation-IDs angezeigt, rechts wird die zugehörige Timeline geladen. Dadurch kann in der Präsentation sehr gut gezeigt werden, welche Services an einer Bestellung beteiligt waren.
+
+% -------------------------------------------------
+% 6 Docker und Betrieb
+% -------------------------------------------------
+\chapter{Docker und Betrieb}
+\section{Docker Compose}
+Das Projekt wird über Docker Compose gestartet. Dadurch können alle benötigten Services lokal gemeinsam ausgeführt werden. Neben den fachlichen Services werden auch Kafka, Zookeeper, PostgreSQL-Datenbanken, Loki, Grafana und das Angular-Frontend gestartet.
+
+\begin{table}[H]
+  \centering
+  \caption{Wichtige lokale Ports}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4cm} X}
+    \toprule
+    \textbf{Komponente} & \textbf{Port / URL} \\
+    \midrule
+    Angular-Frontend & \texttt{http://localhost:3001} \\
+    Shop-Service & \texttt{http://localhost:8090} \\
+    Billing-Service & \texttt{http://localhost:8091} \\
+    Audit-Service & \texttt{http://localhost:5081} \\
+    Warehouse-Service & \texttt{http://localhost:5082} \\
+    Invoice-Service & \texttt{http://localhost:5083} \\
+    Kafka & \texttt{localhost:9092} \\
+    Grafana & \texttt{http://localhost:3000} \\
+    Loki & \texttt{http://localhost:3100} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Frontend-Deployment}
+Das Angular-Frontend wird als eigener Container gebaut und über Nginx ausgeliefert. Nginx dient zusätzlich als Reverse Proxy zu den Backend-Services. Dadurch kann das Frontend über relative API-Pfade arbeiten, zum Beispiel \texttt{/api/shop}, \texttt{/api/audit}, \texttt{/api/warehouse} und \texttt{/api/invoices}.
+
+% -------------------------------------------------
+% 7 Qualitätssicherung
+% -------------------------------------------------
+\chapter{Qualitätssicherung}
+\section{Teststrategie}
+Die Qualitätssicherung erfolgt auf mehreren Ebenen:
+\begin{itemize}
+  \item Unit-Tests prüfen einzelne fachliche Regeln.
+  \item Integrationstests prüfen die Zusammenarbeit mit Datenbank oder Kafka.
+  \item End-to-End-Tests prüfen den Ablauf von Bestellung bis Audit- und Invoice-Ergebnis.
+  \item Manuelle UI-Tests prüfen Shop, Admin, Warehouse und Observability im Browser.
+\end{itemize}
+
+\section{Automatisierte Testergebnisse}
+Am 14. Juli 2026 wurden die Unit-Tests der von Abdelwadoud Mabrouk verantworteten .NET-Services mit dem .NET-10-SDK erneut ausgeführt. Tabelle~\ref{tab:dotnet-tests} dokumentiert den reproduzierbaren Stand.
+
+\begin{table}[H]
+  \centering
+  \caption{\label{tab:dotnet-tests}Ergebnisse der .NET-Unit-Tests am 14. Juli 2026}
+  \begin{tabularx}{\textwidth}{Xrrr}
+    \toprule
+    \textbf{Testprojekt} & \textbf{Bestanden} & \textbf{Fehler} & \textbf{Übersprungen} \\
+    \midrule
+    AuditService.Tests & 8 & 0 & 0 \\
+    WarehouseService.Tests & 11 & 0 & 0 \\
+    InvoiceService.Tests & 10 & 0 & 0 \\
+    \midrule
+    Gesamt & 29 & 0 & 0 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Die Tests decken unter anderem Audit-Snapshots und Event-Deserialisierung, Reservierungs- und Bestandsregeln, Correlation-IDs sowie Rechnungserstellung und Payment-Events ab. Die End-to-End-Tests sind getrennt von den Unit-Tests, weil sie einen laufenden Docker-Compose-Stack mit Datenbanken, Kafka und allen Services voraussetzen.
+
+Nach dem erfolgreichen Docker-Build wurden zusätzlich alle vier Tests des .NET-End-to-End-Testprojekts gegen den laufenden Stack ausgeführt. Alle vier Tests bestanden ohne Fehler oder Überspringen. Geprüft wurden die Erreichbarkeit der drei .NET-Services, drei erfolgreiche Bestellungen über REST und Kafka, die Ablehnung einer Bestellung bei fehlendem Lagerbestand sowie das Ignorieren eines ungültigen Order-Completed-Events ohne Rechnungserstellung. Damit sind sowohl Best- als auch Worst-Case-Pfade des von Abdelwadoud Mabrouk verantworteten Integrationsbereichs automatisiert nachgewiesen.
+
+Die Sicherheitsprüfung der Admin-API ergab für einen Aufruf ohne Zugangsdaten HTTP~401 und mit den konfigurierten Zugangsdaten HTTP~200. Die Health-Endpunkte von Audit, Warehouse und Invoice sowie das Angular-Frontend antworteten jeweils mit HTTP~200.
+
+\section{Manuelle Prüfung des aktuellen Zustands}
+Im aktuellen Projektstand wurden die Container gestartet, Datenbanken geprüft und die Angular-Seiten im Browser geladen. Dabei wurden insbesondere folgende Punkte geprüft:
+\begin{itemize}
+  \item Shop-Seite lädt mit Möbelkategorien und Produktbildern.
+  \item Admin-Dashboard ist von Stock-Verwaltung getrennt.
+  \item Audit-Timeline besitzt eine eigene Seite.
+  \item Services und Datenbanken werden auf einer eigenen Systemstatus-Seite angezeigt.
+  \item Warehouse-Stock besitzt eigene Seiten.
+  \item Observability verweist sauber auf Grafana.
+\end{itemize}
+
+Abbildung~\ref{fig:frontend-shop} zeigt den getesteten Produktkatalog mit Daten aus dem laufenden Shop-Service. Die aktualisierte Anmeldung verlangt für den Admin-Bereich zusätzlich die serverseitig konfigurierten Zugangsdaten.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.88\textwidth,height=0.72\textheight,keepaspectratio]{../images/frontend-shop.png}
+  \caption{\label{fig:frontend-shop}Angular-Produktkatalog im laufenden Docker-Compose-System}
+\end{figure}
+
+\section{Fehlerszenarien}
+Wichtige Fehlerszenarien sind fehlender Lagerbestand, fehlgeschlagene Zahlung und fehlgeschlagene Rechnungserstellung. Diese Fälle müssen nachvollziehbar im Audit erscheinen. Dadurch kann in der Präsentation nicht nur der Erfolgsfall gezeigt werden, sondern auch, wie das System mit Problemen umgeht.
+
+% -------------------------------------------------
+% 8 Reflexion
+% -------------------------------------------------
+\chapter{Reflexion}
+\section{Erreichte Ziele}
+Das Projekt erreicht das Ziel, einen verteilten Online-Shop verständlich umzusetzen. Die Verantwortlichkeiten der Services sind klar getrennt. Der Bestellprozess ist über Audit-Ereignisse nachvollziehbar. Das Angular-Frontend bündelt die Benutzeroberfläche in einer Anwendung und macht das Projekt für eine Präsentation greifbarer.
+
+\section{Bewertung der Architektur}
+Die Architektur ist für den Projektumfang sinnvoll. REST und Kafka werden nicht beliebig eingesetzt, sondern passend zur Aufgabe. REST wird für direkte Entscheidungen verwendet, Kafka für Ereignisse und Entkopplung. Die servicebezogene Datenhaltung unterstützt Wartbarkeit und reduziert unklare Abhängigkeiten.
+
+\section{Grenzen und offene Punkte}
+Es gibt weiterhin Punkte, die in einem produktiven System weiter ausgebaut werden müssten:
+\begin{itemize}
+  \item echte Authentifizierung und Autorisierung,
+  \item vollständige Absicherung aller Admin- und Warehouse-Aktionen,
+  \item robustere Retry- und Fehlerbehandlung,
+  \item mehr automatisierte End-to-End-Tests,
+  \item konsistente Produktbilder aus dem Backend oder einem Asset-Service,
+  \item weitergehende Metriken und Dashboards.
+\end{itemize}
+
+\section{Ausblick}
+Als nächster Schritt wäre es sinnvoll, die Demo-Authentifizierung durch ein echtes Auth-Konzept zu ersetzen. Außerdem könnten Produktbilder und Kategorien direkt im Shop-Service gepflegt werden. Das Frontend ist dafür bereits vorbereitet, weil es Bild- und Kategorieinformationen anzeigen kann, ohne selbst Datenbesitzer zu sein.
+
+% -------------------------------------------------
+% 9 Fazit
+% -------------------------------------------------
+\chapter{Fazit}
+Die Umsetzung zeigt, dass ein Möbel-Online-Shop mit Microservices verständlich und wartbar aufgebaut werden kann. Entscheidend ist die klare Trennung der Verantwortlichkeiten. Der Shop-Service besitzt Produkte, Preise und Bestellungen. Warehouse, Billing, Invoice und Audit übernehmen jeweils eigene Aufgaben. Das Angular-Frontend ergänzt diese Architektur durch eine gemeinsame Oberfläche für Kundinnen und Kunden sowie interne Rollen.
+
+Besonders wertvoll ist die Audit-Timeline. Sie macht sichtbar, was in einem verteilten Prozess passiert. Zusammen mit Grafana und Loki entsteht dadurch sowohl fachliche als auch technische Nachvollziehbarkeit. Insgesamt bietet das Projekt eine gute Grundlage, um zentrale Konzepte moderner Softwarearchitektur praktisch zu zeigen.
+
+% -------------------------------------------------
+% Anhang
+% -------------------------------------------------
+\appendix
+\chapter{Anhang}
+\section{Repository-Struktur}
+\begin{lstlisting}[language={}]
+/
+|- docker-compose.yml
+|- docs/
+|- shop-service-java/
+|- billing-service-java/
+|- warehouse-service-dotnet/
+|- invoice-service-dotnet/
+|- audit-service-dotnet/
+|- frontend-angular/
+\end{lstlisting}
+
+\section{Beispiel für ein Kafka-Ereignis}
+\begin{lstlisting}[language={},caption={Beispiel eines Audit-Ereignisses}]
+{
+  "eventId": "0e16baf6-9eec-4a66-8b8a-4f8d58d4d7a1",
+  "correlationId": "59e76dd9-7f4d-4c7c-8ef8-3dfcdd6c9ed3",
+  "eventType": "PAYMENT_SUCCEEDED",
+  "service": "billing-service",
+  "timestamp": "2026-06-16T10:15:00Z",
+  "statusCode": "SUCCESS"
+}
+\end{lstlisting}
+
+\printbibliography[heading=bibintoc,title={Literaturverzeichnis}]
+
+\end{document}

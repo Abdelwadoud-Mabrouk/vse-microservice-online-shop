@@ -10,7 +10,8 @@ public static class AdminEndpoints
 {
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/admin", () => Results.Redirect("/admin/index.html"));
+        endpoints.MapGet("/admin", (IConfiguration configuration) =>
+            Results.Redirect(configuration["FRONTEND_ADMIN_URL"] ?? "http://localhost:3001/admin"));
 
         endpoints.MapGet("/admin/service-health", async (
             AuditDbContext auditDbContext,

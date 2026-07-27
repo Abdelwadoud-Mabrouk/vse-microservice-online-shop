@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { UserRole, UserSession, demoUsers } from '../models/user.model';
 
 const sessionKey = 'online-shop-session';
+const adminAuthorizationKey = 'online-shop-admin-authorization';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -14,21 +15,38 @@ export class AuthService {
 
   constructor(private readonly router: Router) {}
 
-  loginAs(role: UserRole): void {
+  loginAs(role: UserRole, username?: string, password?: string): boolean {
     const user = demoUsers.find((candidate) => candidate.role === role);
     if (!user) {
-      return;
+      return false;
+    }
+
+    if (role === 'ADMIN') {
+      if (!username || !password) {
+        return false;
+      }
+      sessionStorage.setItem(adminAuthorizationKey, `Basic ${btoa(`${username}:${password}`)}`);
+    } else {
+      sessionStorage.removeItem(adminAuthorizationKey);
     }
 
     sessionStorage.setItem(sessionKey, JSON.stringify(user));
     this.sessionSignal.set(user);
     this.router.navigateByUrl(role === 'ADMIN' ? '/admin' : role === 'WAREHOUSE' ? '/warehouse' : '/shop/products');
+    return true;
   }
 
   logout(): void {
     sessionStorage.removeItem(sessionKey);
+    sessionStorage.removeItem(adminAuthorizationKey);
     this.sessionSignal.set(null);
     this.router.navigateByUrl('/auth/login');
+  }
+
+  adminAuthorization(): string | null {
+    return this.sessionSignal()?.role === 'ADMIN'
+      ? sessionStorage.getItem(adminAuthorizationKey)
+      : null;
   }
 
   hasRole(roles: UserRole[]): boolean {

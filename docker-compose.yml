@@ -158,6 +158,7 @@ services:
       WAREHOUSE_SERVICE_URL: http://warehouse-service:8080
       ADMIN_USERNAME: ${ADMIN_USERNAME:?Set ADMIN_USERNAME in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      FRONTEND_ADMIN_URL: ${FRONTEND_ADMIN_URL:-http://localhost:3001/admin}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       KAFKA_AUDIT_TOPICS: ${KAFKA_AUDIT_TOPICS:-orders,billing,warehouse,invoices}
       KAFKA_AUDIT_CONSUMER_GROUP: ${KAFKA_AUDIT_CONSUMER_GROUP:-audit-service}
@@ -314,6 +315,22 @@ services:
       depends_on:
         - billing-service
       restart: unless-stopped
+
+  # =========================
+  # Frontend (Angular)
+  # =========================
+  frontend-angular:
+    build:
+      context: ./frontend-angular
+    container_name: frontend-angular
+    ports:
+      - "3001:80"
+    depends_on:
+      - audit-service
+      - shop-service
+      - warehouse-service
+      - invoice-service
+    restart: unless-stopped
 
   # =========================
   # Observability
