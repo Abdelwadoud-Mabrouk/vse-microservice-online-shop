@@ -10,7 +10,7 @@ export class ProductServiceService {
 
   private http = inject(HttpClient);
 
-  private apiUrl = 'http://localhost:8080/api/products';
+  private apiUrl = 'http://localhost:8087/api/v1/products';
 
   getApiUrl(){
     return 'http://localhost:8080/'

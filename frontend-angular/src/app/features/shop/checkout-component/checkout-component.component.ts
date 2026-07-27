@@ -110,12 +110,9 @@ export class CheckoutComponentComponent {
 
                 next: order => {
 
-                    sessionStorage.setItem(
-                        'lastOrderId',
-                        order.orderId
-                    );
 
-                    window.location.href = order.approvalUrl;
+                    window.location.href =
+                        order.approvalUrl;
 
                 },
 
@@ -124,20 +121,25 @@ export class CheckoutComponentComponent {
 
                     this.loading.set(false);
 
+                    console.log(err)
+                    console.log(err.status)
 
-                    if (err.status === 503) {
+                    const errorCode =
+                        err.error?.error ?? 'UNKNOWN';
 
-                        this.router.navigate(
-                            ['/shop/payment-error']
-                        );
 
-                    } else {
+                    sessionStorage.setItem(
+                        'checkoutError',
+                        JSON.stringify({
+                            code: errorCode
+                        })
+                    );
 
-                        this.error.set(
-                            "Bestellung konnte nicht erstellt werden."
-                        );
 
-                    }
+                    this.router.navigate(
+                        ['/shop/checkout-error']
+                    );
+
                 }
 
             });

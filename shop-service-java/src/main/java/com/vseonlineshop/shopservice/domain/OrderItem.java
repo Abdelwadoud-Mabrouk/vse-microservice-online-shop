@@ -3,14 +3,17 @@ package com.vseonlineshop.shopservice.domain;
 
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
 @Table(name = "order_items")
-@Data
+@Getter
+@Setter
 public class OrderItem {
 
     @Id
@@ -19,6 +22,7 @@ public class OrderItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
+    @ToString.Exclude
     private Order order;
 
     @Column(name = "product_id", nullable = false)

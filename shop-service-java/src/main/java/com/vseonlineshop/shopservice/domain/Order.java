@@ -3,7 +3,10 @@ package com.vseonlineshop.shopservice.domain;
 
 import com.vseonlineshop.shopservice.dto.payment.PaymentMethod;
 import jakarta.persistence.*;
-import lombok.Data;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -16,7 +19,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "orders")
-@Data
+@Getter
+@Setter
 public class Order {
 
     @Id
@@ -63,6 +67,7 @@ public class Order {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
     private List<OrderItem> items = new ArrayList<>();
 
     public void addItem(OrderItem item) {

@@ -101,7 +101,6 @@ public class PaypalStrategy implements PaymentStrategy {
                             .paypal(new PaypalWallet.Builder()
                                     .experienceContext(new PaypalWalletExperienceContext.Builder()
                                             .returnUrl(successPageUrl)
-                                            .cancelUrl("http://127.0.0.1:5500/cancel.html")
                                             .userAction(PaypalExperienceUserAction.PAY_NOW)
                                             .build())
                                     .build())

@@ -12,9 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,7 +63,7 @@ public class ToolService {
             // Event über Kafka publizieren
             safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
 
-            // Lager-Reservierung stornieren (nur falls bereits eine Reservierung stattfand)
+            // Lager-Reservierung stornieren
             if (reservationOrderId != null) {
                 log.info(
                         "Warehouse Reservation Rollback gestartet",
@@ -80,26 +80,32 @@ public class ToolService {
                 try {
                     ReservationResponse response = warehouseClient.cancelReservation(order);
 
+                    Map<String, Object> context = new HashMap<>();
+
+                    context.put("reservationId", response.reservationId());
+                    context.put("orderId", response.orderId());
+                    context.put("status", response.status());
+
+
                     log.info(
                             "Warehouse Reservierung erfolgreich freigegeben",
                             kv("correlationId", order.getCorrelationId()),
                             kv("service", "shop-service"),
-                            kv("context", Map.of(
-                                    "reservationId", response.reservationId(),
-                                    "orderId", response.orderId(),
-                                    "status", response.status()
-                            ))
+                            kv("context", context)
                     );
                 } catch (Exception ex) {
+                    Map<String, Object> context = new HashMap<>();
+
+                    context.put("reservationId", reservationOrderId);
+                    context.put("orderId", order != null ? order.getId() : null);
+                    context.put("errorMessage", ex.getMessage());
+
+
                     log.error(
                             "Warehouse Rollback fehlgeschlagen",
                             kv("correlationId", order.getCorrelationId()),
                             kv("service", "shop-service"),
-                            kv("context", Map.of(
-                                    "reservationId", reservationOrderId,
-                                    "orderId", order.getId(),
-                                    "errorMessage", ex.getMessage()
-                            )),
+                            kv("context", context),
                             ex
                     );
                 }
@@ -135,7 +141,6 @@ public class ToolService {
             );
         }
     }
-
 
 
     public OrderDetailsResponse toResponse(Order order) {

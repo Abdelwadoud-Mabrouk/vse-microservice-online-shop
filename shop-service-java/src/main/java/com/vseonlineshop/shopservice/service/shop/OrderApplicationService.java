@@ -18,7 +18,6 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
-import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -169,6 +168,7 @@ public class OrderApplicationService {
                 toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.PAYMENT_FAILED, "PAYMENT_SERVICE_UNAVAILABLE", ex);
 
                 throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice derzeit nicht erreichbar.");
+
             }
 
             // Fall 1: Sofortiger Zahlungsfehler vom Provider
@@ -193,7 +193,56 @@ public class OrderApplicationService {
             );
             return checkoutResponse;
 
-        } catch (Exception ex) {
+        }
+        catch (ServiceUnavailableException ex) {
+
+            log.warn(
+                    "Externer Service nicht verfügbar",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorCode", ex.getErrorCode(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
+
+            throw ex;
+        } catch (BusinessException ex) {
+
+            log.warn(
+                    "Business Fehler im Order-Prozess",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorCode", ex.getErrorCode(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
+
+            throw ex;
+        } catch (PaymentServiceException ex) {
+
+            log.warn(
+                    "Payment Fehler im Order-Prozess",
+                    kv("correlationId", order.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", Map.of(
+                            "orderId", order.getId(),
+                            "status", order.getStatus(),
+                            "errorMessage", ex.getMessage()
+                    ))
+            );
+
+            throw ex;
+        }
+
+
+        catch (Exception ex) {
+
             log.error(
                     "Unerwarteter Fehler im Order-Prozess",
                     kv("correlationId", order.getCorrelationId()),
@@ -201,23 +250,33 @@ public class OrderApplicationService {
                     kv("context", Map.of(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
-                            "errorMessage", ex.getMessage(),
-                            "service", "shop-service"
+                            "errorMessage", ex.getMessage()
                     )),
                     ex
             );
 
 
-            if (!(ex instanceof ServiceUnavailableException || ex instanceof BusinessException || ex instanceof PaymentServiceException)) {
+            UUID resId =
+                    (reservation != null)
+                            ? reservation.reservationId()
+                            : null;
 
-                UUID resId = (reservation != null) ? reservation.orderId() : null;
 
-                toolService.cancelOrder(order, resId, OrderStatus.CANCELLED, "ORDER_PROCESSING_INTERNAL_ERROR", ex);
-                throw new GlobalException("INTERNAL_SYSTEM_ERROR", "Ein interner Fehler ist aufgetreten. Bestellung storniert.");
-            }
+            toolService.cancelOrder(
+                    order,
+                    resId,
+                    OrderStatus.CANCELLED,
+                    "ORDER_PROCESSING_INTERNAL_ERROR",
+                    ex
+            );
 
-            throw ex;
+
+            throw new GlobalException(
+                    "INTERNAL_SYSTEM_ERROR",
+                    "Ein interner Fehler ist aufgetreten. Bestellung storniert."
+            );
         }
+
     }
 
 

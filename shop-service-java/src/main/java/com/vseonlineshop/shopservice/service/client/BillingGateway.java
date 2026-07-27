@@ -12,6 +12,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -68,12 +69,20 @@ public class BillingGateway {
                             )
 
                             .onStatus(
+                                    HttpStatusCode::is5xxServerError,
+                                    (req, res) -> {
+                                        throw new HttpServerErrorException(
+                                                res.getStatusCode(),
+                                                "Billing 5xx Server Error"
+                                        );
+                                    }
+                            )
+
+                            .onStatus(
                                     HttpStatusCode::is4xxClientError,
                                     (req, res) -> {
-
                                         throw new PaymentServiceException(
-                                                "Billing rejected payment: "
-                                                        + res.getStatusCode()
+                                                "Billing 4xx Client Error"
                                         );
                                     }
                             )
@@ -178,6 +187,16 @@ public class BillingGateway {
                                         throw new PaymentServiceException(
                                                 "Refund abgelehnt HTTP "
                                                         + res.getStatusCode()
+                                        );
+                                    }
+                            )
+
+                            .onStatus(
+                                    HttpStatusCode::is5xxServerError,
+                                    (req, res) -> {
+                                        throw new HttpServerErrorException(
+                                                res.getStatusCode(),
+                                                "Billing 5xx Server Error"
                                         );
                                     }
                             )

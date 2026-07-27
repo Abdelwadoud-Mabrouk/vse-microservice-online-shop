@@ -1,0 +1,30 @@
+<section class="error-page">
+
+    <h1>
+        Bestellung konnte nicht abgeschlossen werden
+    </h1>
+
+
+    <p>
+        {{ message }}
+    </p>
+
+
+    @if (details) {
+
+        <p class="error-details">
+            {{ details }}
+        </p>
+
+    }
+
+
+    <button
+            (click)="backToCheckout()">
+
+        Zurück zum Checkout
+
+    </button>
+
+
+</section>

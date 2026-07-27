@@ -46,7 +46,7 @@ export const routes: Routes = [
           { path: 'cart', component: CartPageComponent },
           { path: 'checkout', component: CheckoutComponentComponent},
           {
-            path: 'payment-error',
+            path: 'checkout-error',
             component: PaymentErrorComponent
           },
           { path: 'orders/:id', component: OrderStatusPageComponent, canActivate: [authGuard] },
