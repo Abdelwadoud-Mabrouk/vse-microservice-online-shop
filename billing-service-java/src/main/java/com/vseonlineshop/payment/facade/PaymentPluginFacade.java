@@ -2,7 +2,7 @@ package com.vseonlineshop.payment.facade;
 
 import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import com.vseonlineshop.payment.dto.PaymentRequest;
-import com.vseonlineshop.payment.dto.SmallProviderResponse;
+import com.vseonlineshop.payment.dto.PaymentProviderResponse;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import com.vseonlineshop.payment.strategy.PaymentStrategy;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ public class PaymentPluginFacade {
         this.providers = providers;
     }
 
-    public SmallProviderResponse charge(PaymentRequest request, UUID paymentId) {
+    public PaymentProviderResponse charge(PaymentRequest request, UUID paymentId) {
         PaymentStrategy strategy = resolveStrategy(request.paymentMethod());
         log.info("[PaymentFacade] Nutze Provider '{}' für Methode '{}'",
                 strategy.getProviderName(), request.paymentMethod());

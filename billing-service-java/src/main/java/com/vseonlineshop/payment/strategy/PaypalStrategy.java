@@ -10,7 +10,7 @@ import com.vseonlineshop.payment.strategy.config.PaypalConfig;
 import com.vseonlineshop.payment.dto.CartItemDTO;
 import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import com.vseonlineshop.payment.dto.PaymentRequest;
-import com.vseonlineshop.payment.dto.SmallProviderResponse;
+import com.vseonlineshop.payment.dto.PaymentProviderResponse;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +42,7 @@ public class PaypalStrategy implements PaymentStrategy {
     }
 
     @Override
-    public SmallProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
+    public PaymentProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
         log.info("[PAYPAL/START] Initialisiere Order für Order-ID={}", orderRequest.orderId());
         try {
 
@@ -131,7 +131,7 @@ public class PaypalStrategy implements PaymentStrategy {
                 auditJson = paypalOrder.toString();
             }
 
-            return new SmallProviderResponse(
+            return new PaymentProviderResponse(
                     approveUrl,
                     paypalOrder.getId(),
                     auditJson

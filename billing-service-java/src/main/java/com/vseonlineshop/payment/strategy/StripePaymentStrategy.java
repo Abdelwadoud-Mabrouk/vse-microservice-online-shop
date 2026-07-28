@@ -42,7 +42,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
 
 
     @Override
-    public SmallProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
+    public PaymentProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
         log.info("[STRIPE/START] Initialisiere Checkout-Session für Order-ID={} via {}",
                 orderRequest.orderId(), orderRequest.paymentMethod());
 
@@ -96,7 +96,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
             log.info("[STRIPE/SUCCESS] Checkout-Session erfolgreich erstellt. Stripe-ID={}, URL={}",
                     session.getId(), session.getUrl());
 
-            return new SmallProviderResponse(
+            return new PaymentProviderResponse(
                     session.getUrl(),
                     session.getId(),
                     session.toJson()

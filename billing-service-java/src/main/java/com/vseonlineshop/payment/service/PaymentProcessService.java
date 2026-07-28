@@ -2,7 +2,7 @@ package com.vseonlineshop.payment.service;
 
 import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentResponse;
-import com.vseonlineshop.payment.dto.SmallProviderResponse;
+import com.vseonlineshop.payment.dto.PaymentProviderResponse;
 import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
 import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentStatus;
@@ -282,7 +282,7 @@ public class PaymentProcessService {
             boolean isNewPayment
     ) {
         try {
-            SmallProviderResponse providerResponse = paymentFacade.charge(request, payment.getPaymentId());
+            PaymentProviderResponse providerResponse = paymentFacade.charge(request, payment.getPaymentId());
             saveTransaction(
                     payment,
                     providerResponse.providerTransactionId(),
