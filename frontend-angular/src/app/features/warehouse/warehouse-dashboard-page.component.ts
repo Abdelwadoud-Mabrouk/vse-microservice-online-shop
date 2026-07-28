@@ -1,12 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-warehouse-dashboard-page',
-  standalone: true,
-  imports: [RouterLink, PageHeaderComponent],
-  template: `
+    selector: 'app-warehouse-dashboard-page',
+    imports: [RouterLink, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Warehouse"
       title="Stock Operations"

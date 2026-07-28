@@ -1,13 +1,13 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { ShopApiService } from '../../core/api/shop-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-product-edit-page',
-  standalone: true,
-  imports: [AsyncPipe, PageHeaderComponent],
-  template: `
+    selector: 'app-product-edit-page',
+    imports: [AsyncPipe, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Edit Product"

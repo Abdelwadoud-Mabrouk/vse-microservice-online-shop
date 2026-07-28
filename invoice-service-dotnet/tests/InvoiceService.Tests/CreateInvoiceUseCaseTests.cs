@@ -37,6 +37,23 @@ public sealed class CreateInvoiceUseCaseTests
         Assert.Contains(audit.Events, item => item.EventType == "INVOICE_CREATION_FAILED" && item.StatusCode == "FAILURE");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenTransactionWasAlreadyProcessed_ReturnsExistingInvoiceWithoutSecondDocument()
+    {
+        var repository = new InMemoryInvoiceRepository();
+        var writer = new FakeDocumentWriter();
+        var audit = new RecordingAuditSink();
+        var useCase = new CreateInvoiceUseCase(repository, writer, audit);
+        var payment = NewPayment();
+
+        var first = await useCase.ExecuteAsync(new CreateInvoiceCommand(payment, 3), CancellationToken.None);
+        var second = await useCase.ExecuteAsync(new CreateInvoiceCommand(payment, 3), CancellationToken.None);
+
+        Assert.Equal(first.Invoice!.InvoiceId, second.Invoice!.InvoiceId);
+        Assert.Equal(1, writer.Attempts);
+        Assert.Single(repository.Invoices);
+    }
+
     private static PaymentSucceeded NewPayment()
     {
         return PaymentSucceeded.Create(
@@ -63,6 +80,11 @@ public sealed class CreateInvoiceUseCaseTests
         public Task<Invoice?> FindAsync(Guid invoiceId, CancellationToken cancellationToken)
         {
             return Task.FromResult(Invoices.FirstOrDefault(invoice => invoice.InvoiceId == invoiceId));
+        }
+
+        public Task<Invoice?> FindByTransactionIdAsync(string transactionId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Invoices.SingleOrDefault(invoice => invoice.TransactionId == transactionId));
         }
 
         public Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken)

@@ -27,6 +27,16 @@ public sealed class CreateInvoiceUseCase(
             "Invoice creation started for order {OrderId}",
             payment.OrderId);
 
+        var existing = await invoices.FindByTransactionIdAsync(payment.TransactionId, cancellationToken);
+        if (existing is not null)
+        {
+            _logger.LogInformation(
+                "Duplicate invoice request ignored for transaction {TransactionId}; returning invoice {InvoiceId}",
+                payment.TransactionId,
+                existing.InvoiceId);
+            return new InvoiceCreationResult(true, 0, "Existing invoice returned.", existing.ToDto());
+        }
+
         await audit.RecordAsync(payment.CorrelationId, "INVOICE_CREATION_STARTED", "SUCCESS", new
         {
             payment.OrderId,

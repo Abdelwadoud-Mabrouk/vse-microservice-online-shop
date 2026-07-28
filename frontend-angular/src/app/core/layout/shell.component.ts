@@ -1,13 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { CartService } from '../../features/shop/cart.service';
 
 @Component({
-  selector: 'app-shell',
-  standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
-  template: `
+    selector: 'app-shell',
+    imports: [RouterOutlet, RouterLink, RouterLinkActive],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <div class="shell">
       <header class="storefront-nav">
         <a class="brand" routerLink="/shop/products">

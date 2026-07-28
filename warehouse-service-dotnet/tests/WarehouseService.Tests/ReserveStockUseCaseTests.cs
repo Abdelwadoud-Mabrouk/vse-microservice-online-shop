@@ -1,5 +1,8 @@
 using WarehouseService.Application;
 using WarehouseService.Domain;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 
 namespace WarehouseService.Tests;
 
@@ -64,7 +67,7 @@ public sealed class ReserveStockUseCaseTests
         var result = await useCase.ExecuteAsync(reservation.ReservationId, reservation.CorrelationId, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal(ReservationStatus.Committed, result.Status);
+        Assert.Equal(ReservationStatus.Committed, result.Reservation!.Status);
         Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_COMMITTED" && item.StatusCode == "SUCCESS");
     }
 
@@ -77,7 +80,7 @@ public sealed class ReserveStockUseCaseTests
 
         var result = await useCase.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.Equal(ReservationTransitionOutcome.NotFound, result.Outcome);
         Assert.DoesNotContain(audit.Events, item => item.EventType == "WAREHOUSE_COMMITTED");
     }
 
@@ -95,8 +98,27 @@ public sealed class ReserveStockUseCaseTests
         var result = await useCase.ExecuteAsync(reservation.ReservationId, reservation.CorrelationId, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal(ReservationStatus.Cancelled, result.Status);
+        Assert.Equal(ReservationStatus.Cancelled, result.Reservation!.Status);
         Assert.Contains(audit.Events, item => item.EventType == "WAREHOUSE_RESERVATION_CANCELLED" && item.StatusCode == "COMPENSATED");
+    }
+
+    [Fact]
+    public async Task CommitAsync_WhenDevelopmentFailureSimulationIsEnabled_ThrowsControlledException()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FailureSimulation:FailCommit"] = "true"
+            })
+            .Build();
+        var useCase = new CommitReservationUseCase(
+            new StubWarehouseRepository(new ReservationResult(false, "unused", null)),
+            new RecordingAuditSink(),
+            configuration: configuration,
+            environment: new TestHostEnvironment("Development"));
+
+        await Assert.ThrowsAsync<CommitFailureSimulationException>(() =>
+            useCase.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
     }
 
     private static Reservation NewReservation()
@@ -141,8 +163,31 @@ public sealed class ReserveStockUseCaseTests
 
         public ReservationResult TryReserve(ReserveStockCommand command) => result;
 
-        public Reservation? Cancel(Guid reservationId) => cancelledReservation;
+        public ReservationTransitionResult Cancel(Guid reservationId) =>
+            cancelledReservation is null
+                ? new(ReservationTransitionOutcome.NotFound, "missing", null)
+                : new(ReservationTransitionOutcome.Applied, "cancelled", ToDto(cancelledReservation));
 
-        public Reservation? Commit(Guid reservationId) => committedReservation;
+        public ReservationTransitionResult Commit(Guid reservationId) =>
+            committedReservation is null
+                ? new(ReservationTransitionOutcome.NotFound, "missing", null)
+                : new(ReservationTransitionOutcome.Applied, "committed", ToDto(committedReservation));
+
+        private static ReservationDto ToDto(Reservation reservation) => new(
+            reservation.ReservationId,
+            reservation.OrderId,
+            reservation.CorrelationId,
+            reservation.Items,
+            reservation.Status,
+            reservation.CreatedAt,
+            reservation.UpdatedAt);
+    }
+
+    private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+        public string ApplicationName { get; set; } = "WarehouseService.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

@@ -44,6 +44,15 @@ public sealed class GetAuditTimelineUseCaseTests
             throw new NotSupportedException();
         }
 
+        public Task<AuditSnapshot?> FindByIdAsync(Guid eventId, CancellationToken cancellationToken) =>
+            Task.FromResult(snapshots.SingleOrDefault(snapshot => snapshot.Id == eventId));
+
+        public Task<AuditSnapshot?> FindLatestByCorrelationIdAsync(Guid correlationId, CancellationToken cancellationToken) =>
+            Task.FromResult(snapshots
+                .Where(snapshot => snapshot.CorrelationId == correlationId)
+                .OrderByDescending(snapshot => snapshot.Timestamp)
+                .FirstOrDefault());
+
         public Task<IReadOnlyList<AuditSnapshot>> FindByCorrelationIdAsync(Guid correlationId, CancellationToken cancellationToken)
         {
             IReadOnlyList<AuditSnapshot> result = snapshots

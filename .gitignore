@@ -1,15 +1,67 @@
+# R
 .Rhistory
 docs/.Rhistory
-.DS_Store
-bin/
-obj/
-target/
+
+# .NET
+**/bin/
+**/obj/
 .vs/
-.vscode/
 TestResults/
 *.user
 *.suo
+
+# Java
+**/target/
+**/build/
+.gradle/
+*.class
+
+# Angular / Node
+**/node_modules/
+**/dist/
+.angular/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+
+# Logs und temporäre Dateien
 *.log
+logs/
+tmp/
+*.tmp
+*.temp
+*.bak
+
+# Lokale Umgebungsdateien
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+
+# LaTeX-Zwischendateien
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc

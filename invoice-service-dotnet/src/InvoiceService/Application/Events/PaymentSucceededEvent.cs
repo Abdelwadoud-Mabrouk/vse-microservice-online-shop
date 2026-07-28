@@ -2,7 +2,7 @@ using InvoiceService.Domain;
 
 namespace InvoiceService.Application.Events;
 
-public sealed record OrderCompletedEvent(
+public sealed record PaymentSucceededEvent(
     Guid EventId,
     Guid CorrelationId,
     string EventType,

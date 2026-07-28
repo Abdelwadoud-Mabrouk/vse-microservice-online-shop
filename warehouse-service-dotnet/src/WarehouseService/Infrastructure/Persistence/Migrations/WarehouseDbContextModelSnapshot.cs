@@ -76,6 +76,7 @@ public sealed class WarehouseDbContextModelSnapshot : ModelSnapshot
                 .HasDatabaseName("ix_warehouse_reservations_correlation");
 
             builder.HasIndex("OrderId")
+                .IsUnique()
                 .HasDatabaseName("ix_warehouse_reservations_order");
 
             builder.ToTable("warehouse_reservations");

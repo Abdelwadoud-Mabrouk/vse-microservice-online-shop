@@ -103,6 +103,15 @@ public sealed class InMemoryWarehouseRepository : IWarehouseRepository
     {
         lock (_sync)
         {
+            var existing = _reservations.Values.SingleOrDefault(value => value.OrderId == command.OrderId);
+            if (existing is not null)
+            {
+                var identical = SameItems(existing.Items, command.Items);
+                return identical
+                    ? new ReservationResult(true, "Existing reservation returned.", existing.ToDto(), IsReplay: true)
+                    : new ReservationResult(false, "orderId is already used by a different reservation request.", existing.ToDto(), IsConflict: true);
+            }
+
             foreach (var item in command.Items)
             {
                 if (!_availableStock.TryGetValue(item.ProductId, out var stockItem) || stockItem.AvailableQuantity < item.Quantity)
@@ -127,13 +136,23 @@ public sealed class InMemoryWarehouseRepository : IWarehouseRepository
         }
     }
 
-    public Reservation? Cancel(Guid reservationId)
+    public ReservationTransitionResult Cancel(Guid reservationId)
     {
         lock (_sync)
         {
-            if (!_reservations.TryGetValue(reservationId, out var reservation) || reservation.Status != ReservationStatus.Reserved)
+            if (!_reservations.TryGetValue(reservationId, out var reservation))
             {
-                return null;
+                return new(ReservationTransitionOutcome.NotFound, "Reservation does not exist.", null);
+            }
+
+            if (reservation.Status == ReservationStatus.Cancelled)
+            {
+                return new(ReservationTransitionOutcome.AlreadyApplied, "Reservation was already cancelled.", reservation.ToDto());
+            }
+
+            if (reservation.Status != ReservationStatus.Reserved)
+            {
+                return new(ReservationTransitionOutcome.Conflict, $"Reservation in state {reservation.Status} cannot be cancelled.", reservation.ToDto());
             }
 
             foreach (var item in reservation.Items)
@@ -149,24 +168,38 @@ public sealed class InMemoryWarehouseRepository : IWarehouseRepository
 
             var cancelled = reservation.Cancel();
             _reservations[reservationId] = cancelled;
-            return cancelled;
+            return new(ReservationTransitionOutcome.Applied, "Reservation cancelled.", cancelled.ToDto());
         }
     }
 
-    public Reservation? Commit(Guid reservationId)
+    public ReservationTransitionResult Commit(Guid reservationId)
     {
         lock (_sync)
         {
-            if (!_reservations.TryGetValue(reservationId, out var reservation) || reservation.Status != ReservationStatus.Reserved)
+            if (!_reservations.TryGetValue(reservationId, out var reservation))
             {
-                return null;
+                return new(ReservationTransitionOutcome.NotFound, "Reservation does not exist.", null);
+            }
+
+            if (reservation.Status == ReservationStatus.Committed)
+            {
+                return new(ReservationTransitionOutcome.AlreadyApplied, "Reservation was already committed.", reservation.ToDto());
+            }
+
+            if (reservation.Status != ReservationStatus.Reserved)
+            {
+                return new(ReservationTransitionOutcome.Conflict, $"Reservation in state {reservation.Status} cannot be committed.", reservation.ToDto());
             }
 
             var committed = reservation.Commit();
             _reservations[reservationId] = committed;
-            return committed;
+            return new(ReservationTransitionOutcome.Applied, "Reservation committed.", committed.ToDto());
         }
     }
+
+    private static bool SameItems(IReadOnlyList<ReservationItem> left, IReadOnlyList<ReservationItem> right) =>
+        left.OrderBy(item => item.ProductId).ThenBy(item => item.Sku)
+            .SequenceEqual(right.OrderBy(item => item.ProductId).ThenBy(item => item.Sku));
 
     private static Dictionary<Guid, StockItem> LoadInitialStock(string? value)
     {

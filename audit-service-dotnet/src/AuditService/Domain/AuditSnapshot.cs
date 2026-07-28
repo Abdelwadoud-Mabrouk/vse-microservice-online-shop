@@ -18,7 +18,8 @@ public sealed record AuditSnapshot(
         IReadOnlyDictionary<string, object?> payload,
         Guid? previousEventId,
         string actor,
-        string statusCode)
+        string statusCode,
+        Guid? eventId = null)
     {
         if (correlationId == Guid.Empty)
         {
@@ -26,7 +27,7 @@ public sealed record AuditSnapshot(
         }
 
         return new AuditSnapshot(
-            Guid.NewGuid(),
+            eventId is null || eventId.Value == Guid.Empty ? Guid.NewGuid() : eventId.Value,
             correlationId,
             Required(eventType, nameof(eventType)),
             Required(service, nameof(service)),

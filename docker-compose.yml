@@ -144,13 +144,16 @@ services:
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic billing --partitions 1 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic warehouse --partitions 1 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic invoices --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic security-alerts --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic system-alerts --partitions 1 --replication-factor 1
 
   # =========================
   # Audit Service
   # =========================
   audit-service:
     build:
-      context: ./audit-service-dotnet
+      context: .
+      dockerfile: audit-service-dotnet/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       AUDIT_DB_CONNECTION: Host=audit-db;Port=5432;Database=${AUDIT_DB_NAME:?Set AUDIT_DB_NAME in .env};Username=${AUDIT_DB_USER:?Set AUDIT_DB_USER in .env};Password=${AUDIT_DB_PASSWORD:?Set AUDIT_DB_PASSWORD in .env}
@@ -160,9 +163,11 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       FRONTEND_ADMIN_URL: ${FRONTEND_ADMIN_URL:-http://localhost:3001/admin}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      KAFKA_AUDIT_TOPICS: ${KAFKA_AUDIT_TOPICS:-orders,billing,warehouse,invoices}
+      KAFKA_AUDIT_TOPICS: ${KAFKA_AUDIT_TOPICS:-orders,billing,warehouse,invoices,security-alerts,system-alerts}
       KAFKA_AUDIT_CONSUMER_GROUP: ${KAFKA_AUDIT_CONSUMER_GROUP:-audit-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_DIRECTORY: /app/logs
+      LOG_RETENTION_DAYS: 14
     depends_on:
       audit-db:
         condition: service_healthy
@@ -174,18 +179,23 @@ services:
         condition: service_started
     ports:
       - "5081:8080"
+    volumes:
+      - audit-logs:/app/logs
 
   # =========================
   # Warehouse Service
   # =========================
   warehouse-service:
     build:
-      context: ./warehouse-service-dotnet
+      context: .
+      dockerfile: warehouse-service-dotnet/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       AUDIT_SERVICE_URL: http://audit-service:8080
       WAREHOUSE_DB_CONNECTION: Host=warehouse-db;Port=5432;Database=${WAREHOUSE_DB_NAME:?Set WAREHOUSE_DB_NAME in .env};Username=${WAREHOUSE_DB_USER:?Set WAREHOUSE_DB_USER in .env};Password=${WAREHOUSE_DB_PASSWORD:?Set WAREHOUSE_DB_PASSWORD in .env}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      LOG_DIRECTORY: /app/logs
+      LOG_RETENTION_DAYS: 14
       KAFKA_WAREHOUSE_TOPIC: ${KAFKA_WAREHOUSE_TOPIC:-warehouse}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
@@ -199,13 +209,16 @@ services:
         condition: service_started
     ports:
       - "5082:8080"
+    volumes:
+      - warehouse-logs:/app/logs
 
   # =========================
   # Invoice Service
   # =========================
   invoice-service:
     build:
-      context: ./invoice-service-dotnet
+      context: .
+      dockerfile: invoice-service-dotnet/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       AUDIT_SERVICE_URL: http://audit-service:8080
@@ -213,11 +226,13 @@ services:
       INVOICE_FORCE_FAILURE: "false"
       INVOICE_DATA_DIR: /app/data/invoices
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders}
+      KAFKA_PAYMENT_SUCCEEDED_TOPIC: ${KAFKA_BILLING_TOPIC:-billing}
       KAFKA_INVOICES_TOPIC: ${KAFKA_INVOICES_TOPIC:-invoices}
 
       KAFKA_INVOICE_CONSUMER_GROUP: ${KAFKA_INVOICE_CONSUMER_GROUP:-invoice-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_DIRECTORY: /app/logs
+      LOG_RETENTION_DAYS: 14
     depends_on:
       audit-service:
         condition: service_started
@@ -229,6 +244,7 @@ services:
       - "5083:8080"
     volumes:
       - invoice-data:/app/data/invoices
+      - invoice-logs:/app/logs
 
 
   # =========================
@@ -378,3 +394,6 @@ volumes:
   grafana-data:
   billing-db-data:
   product-db-data:
+  audit-logs:
+  warehouse-logs:
+  invoice-logs:

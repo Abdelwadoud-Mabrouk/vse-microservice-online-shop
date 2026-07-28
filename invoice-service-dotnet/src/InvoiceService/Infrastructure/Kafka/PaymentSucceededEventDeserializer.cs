@@ -4,7 +4,7 @@ using InvoiceService.Domain;
 
 namespace InvoiceService.Infrastructure.Kafka;
 
-public static class OrderCompletedEventDeserializer
+public static class PaymentSucceededEventDeserializer
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -15,10 +15,10 @@ public static class OrderCompletedEventDeserializer
     {
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
-        return string.Equals(ReadString(root, "eventType"), "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(ReadString(root, "eventType"), "PAYMENT_SUCCEEDED", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static OrderCompletedEvent Deserialize(string message)
+    public static PaymentSucceededEvent Deserialize(string message)
     {
         using var document = JsonDocument.Parse(message);
         var root = document.RootElement;
@@ -32,17 +32,17 @@ public static class OrderCompletedEventDeserializer
         var customer = ReadCustomer(payload);
         var items = ReadItems(payload);
 
-        var eventType = ReadString(root, "eventType") ?? "ORDER_COMPLETED";
-        if (!string.Equals(eventType, "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase))
+        var eventType = ReadString(root, "eventType") ?? "PAYMENT_SUCCEEDED";
+        if (!string.Equals(eventType, "PAYMENT_SUCCEEDED", StringComparison.OrdinalIgnoreCase))
         {
-            throw new JsonException("Invoice service only handles ORDER_COMPLETED events.");
+            throw new JsonException("Invoice service only handles PAYMENT_SUCCEEDED events.");
         }
 
-        return new OrderCompletedEvent(
+        return new PaymentSucceededEvent(
             ReadGuid(root, "eventId", required: false) ?? Guid.NewGuid(),
             correlationId,
             eventType,
-            ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service",
+            ReadString(root, "service") ?? ReadString(root, "source") ?? "billing-service",
             ReadDateTime(root, "timestamp") ?? ReadDateTime(root, "occurredAt") ?? DateTimeOffset.UtcNow,
             ReadGuid(payload, "orderId") ?? Guid.Empty,
             ReadString(payload, "transactionId") ?? ReadString(payload, "paymentId") ?? string.Empty,
@@ -52,7 +52,7 @@ public static class OrderCompletedEventDeserializer
             customer,
             items,
             ReadGuid(root, "previousEventId", required: false),
-            ReadString(root, "actor") ?? ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service",
+            ReadString(root, "actor") ?? ReadString(root, "service") ?? ReadString(root, "source") ?? "billing-service",
             ReadString(root, "statusCode") ?? "SUCCESS");
     }
 
@@ -60,7 +60,7 @@ public static class OrderCompletedEventDeserializer
     {
         if (!payload.TryGetProperty("customer", out var customer))
         {
-            throw new JsonException("ORDER_COMPLETED event is missing customer details.");
+            throw new JsonException("PAYMENT_SUCCEEDED event is missing customer details.");
         }
 
         var email = ReadString(customer, "email")
@@ -80,7 +80,7 @@ public static class OrderCompletedEventDeserializer
     {
         if (!payload.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
         {
-            throw new JsonException("ORDER_COMPLETED event is missing invoice items.");
+            throw new JsonException("PAYMENT_SUCCEEDED event is missing invoice items.");
         }
 
         return items.EnumerateArray()

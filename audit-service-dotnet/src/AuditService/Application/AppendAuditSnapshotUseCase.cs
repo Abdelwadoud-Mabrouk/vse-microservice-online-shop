@@ -21,14 +21,36 @@ public sealed class AppendAuditSnapshotUseCase(
             ["sourceService"] = command.Service
         });
 
+        if (command.EventId is { } eventId && eventId != Guid.Empty)
+        {
+            var existing = await snapshots.FindByIdAsync(eventId, cancellationToken);
+            if (existing is not null)
+            {
+                _logger.LogInformation(
+                    "Duplicate audit event {EventId} ignored; existing snapshot returned",
+                    eventId);
+                return existing.ToDto();
+            }
+        }
+
+        var previousEventId = command.PreviousEventId;
+        if (previousEventId is null)
+        {
+            var previousSnapshot = await snapshots.FindLatestByCorrelationIdAsync(
+                command.CorrelationId,
+                cancellationToken);
+            previousEventId = previousSnapshot?.Id;
+        }
+
         var snapshot = AuditSnapshot.Create(
             command.CorrelationId,
             command.EventType,
             command.Service,
             command.Payload,
-            command.PreviousEventId,
+            previousEventId,
             command.Actor,
-            command.StatusCode);
+            command.StatusCode,
+            command.EventId);
 
         await snapshots.AppendAsync(snapshot, cancellationToken);
         _logger.LogInformation(

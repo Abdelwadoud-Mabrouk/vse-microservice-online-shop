@@ -1,11 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-customer-orders-page',
-  standalone: true,
-  imports: [PageHeaderComponent],
-  template: `
+    selector: 'app-customer-orders-page',
+    imports: [PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Customer Account"
       title="Own Orders"

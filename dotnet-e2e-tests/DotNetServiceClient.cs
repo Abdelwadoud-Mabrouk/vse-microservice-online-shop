@@ -69,10 +69,27 @@ public sealed class DotNetServiceClient : IDisposable
 
         using var message = NewJsonRequest(HttpMethod.Post, "/reservations", request, correlationId);
         var response = await _warehouse.SendAsync(message, cancellationToken);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Created, HttpStatusCode.OK });
 
         using var document = await ReadJsonAsync(response, cancellationToken);
         return document.RootElement.GetProperty("reservationId").GetGuid();
+    }
+
+    public async Task<int> GetAvailableQuantityAsync(Product product, CancellationToken cancellationToken)
+    {
+        var response = await _warehouse.GetAsync($"/inventory/{product.ProductId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(response, cancellationToken);
+        return document.RootElement.GetProperty("availableQuantity").GetInt32();
+    }
+
+    public async Task<int> CountInvoicesAsync(string customerEmail, CancellationToken cancellationToken)
+    {
+        var encodedEmail = Uri.EscapeDataString(customerEmail);
+        var response = await _invoice.GetAsync($"/invoices?customerEmail={encodedEmail}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(response, cancellationToken);
+        return document.RootElement.GetArrayLength();
     }
 
     public async Task<HttpStatusCode> TryReserveAsync(

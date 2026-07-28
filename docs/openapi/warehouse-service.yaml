@@ -103,8 +103,10 @@ paths:
       responses:
         "201":
           description: Reservation created.
+        "200":
+          description: Existing identical reservation returned (idempotent retry).
         "409":
-          description: Insufficient stock.
+          description: Insufficient stock or orderId reused with different items.
         "422":
           description: Invalid request.
   /reservations/{reservationId}:
@@ -122,7 +124,9 @@ paths:
         "200":
           description: Reservation cancelled.
         "404":
-          description: Reservation not found or no longer cancellable.
+          description: Reservation not found.
+        "409":
+          description: Reservation is committed and cannot be cancelled.
   /reservations/{reservationId}/commit:
     post:
       summary: Commit a reservation after successful payment.
@@ -138,7 +142,11 @@ paths:
         "200":
           description: Reservation committed.
         "404":
-          description: Reservation not found or no longer committable.
+          description: Reservation not found.
+        "409":
+          description: Reservation is cancelled and cannot be committed.
+        "500":
+          description: Controlled commit failure in Development or unexpected server error.
 components:
   parameters:
     CorrelationId:

@@ -9,7 +9,7 @@ public sealed class CancelReservationUseCase(
 {
     private readonly ILogger<CancelReservationUseCase> _logger = logger ?? NullLogger<CancelReservationUseCase>.Instance;
 
-    public async Task<ReservationDto?> ExecuteAsync(Guid reservationId, Guid correlationId, CancellationToken cancellationToken)
+    public async Task<ReservationTransitionResult> ExecuteAsync(Guid reservationId, Guid correlationId, CancellationToken cancellationToken)
     {
         using var scope = _logger.BeginScope(new Dictionary<string, object?>
         {
@@ -19,8 +19,8 @@ public sealed class CancelReservationUseCase(
             ["entityId"] = reservationId
         });
 
-        var reservation = warehouse.Cancel(reservationId);
-        if (reservation is null)
+        var result = warehouse.Cancel(reservationId);
+        if (!result.Success)
         {
             _logger.LogWarning(
                 "Reservation {ReservationId} could not be cancelled with status {Status} and errorCode {ErrorCode}",
@@ -28,16 +28,20 @@ public sealed class CancelReservationUseCase(
                 "BUSINESS_FAILED",
                 "RESERVATION_NOT_FOUND");
 
-            return null;
+            return result;
         }
 
-        var dto = reservation.ToDto();
         _logger.LogInformation(
-            "Reservation {ReservationId} cancelled with status {Status}",
+            "Reservation {ReservationId} cancelled with status {Status}, idempotentReplay {IdempotentReplay}",
             reservationId,
-            "COMPENSATED");
+            "COMPENSATED",
+            result.Outcome == ReservationTransitionOutcome.AlreadyApplied);
 
-        await audit.RecordAsync(correlationId, "WAREHOUSE_RESERVATION_CANCELLED", "COMPENSATED", dto, cancellationToken);
-        return dto;
+        if (result.Outcome == ReservationTransitionOutcome.Applied)
+        {
+            await audit.RecordAsync(correlationId, "WAREHOUSE_RESERVATION_CANCELLED", "COMPENSATED", result.Reservation!, cancellationToken);
+        }
+
+        return result;
     }
 }

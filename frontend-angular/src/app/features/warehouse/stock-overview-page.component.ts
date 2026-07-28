@@ -1,14 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { WarehouseApiService } from '../../core/api/warehouse-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-stock-overview-page',
-  standalone: true,
-  imports: [AsyncPipe, RouterLink, PageHeaderComponent],
-  template: `
+    selector: 'app-stock-overview-page',
+    imports: [AsyncPipe, RouterLink, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Warehouse"
       title="Stock Overview"

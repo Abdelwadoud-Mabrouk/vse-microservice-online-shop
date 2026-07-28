@@ -7,4 +7,5 @@ public sealed record CreateAuditSnapshotCommand(
     IReadOnlyDictionary<string, object?> Payload,
     Guid? PreviousEventId,
     string Actor,
-    string StatusCode);
+    string StatusCode,
+    Guid? EventId = null);

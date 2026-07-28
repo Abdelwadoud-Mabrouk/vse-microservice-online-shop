@@ -4,7 +4,7 @@ public sealed class KafkaConsumerOptions
 {
     public string? BootstrapServers { get; init; }
 
-    public IReadOnlyList<string> Topics { get; init; } = ["orders", "billing", "warehouse", "invoices"];
+    public IReadOnlyList<string> Topics { get; init; } = ["orders", "billing", "warehouse", "invoices", "security-alerts", "system-alerts"];
 
     public string ConsumerGroupId { get; init; } = "audit-service";
 

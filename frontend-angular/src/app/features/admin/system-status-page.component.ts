@@ -1,13 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { AdminApiService, ServiceHealth } from '../../core/api/admin-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-system-status-page',
-  standalone: true,
-  imports: [AsyncPipe, PageHeaderComponent],
-  template: `
+    selector: 'app-system-status-page',
+    imports: [AsyncPipe, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Services & databases"

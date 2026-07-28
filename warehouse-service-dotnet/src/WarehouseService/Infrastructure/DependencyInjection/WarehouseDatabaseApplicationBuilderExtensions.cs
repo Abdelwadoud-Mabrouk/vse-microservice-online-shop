@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WarehouseService.Infrastructure.Persistence;
+using WarehouseService.Infrastructure.Persistence.Configurations;
 
 namespace WarehouseService.Infrastructure.DependencyInjection;
 
@@ -23,12 +24,39 @@ public static class WarehouseDatabaseApplicationBuilderExtensions
 
         await MarkInitialMigrationAppliedForExistingSchemaAsync(dbContext, cancellationToken: default);
         await dbContext.Database.MigrateAsync();
+        await AddMissingCatalogProductsAsync(dbContext, cancellationToken: default);
 
         logger.LogInformation(
             "Warehouse database migrations applied for service {Service}",
             "warehouse-service");
 
         return app;
+    }
+
+    private static async Task AddMissingCatalogProductsAsync(
+        WarehouseDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var catalogProductIds = WarehouseCatalogSeed.Products
+            .Select(product => product.ProductId)
+            .ToArray();
+
+        var existingProductIds = await dbContext.Products
+            .Where(product => catalogProductIds.Contains(product.ProductId))
+            .Select(product => product.ProductId)
+            .ToListAsync(cancellationToken);
+
+        var missingProducts = WarehouseCatalogSeed.Products
+            .Where(product => !existingProductIds.Contains(product.ProductId))
+            .ToArray();
+
+        if (missingProducts.Length == 0)
+        {
+            return;
+        }
+
+        dbContext.Products.AddRange(missingProducts);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task MarkInitialMigrationAppliedForExistingSchemaAsync(

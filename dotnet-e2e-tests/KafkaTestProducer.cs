@@ -140,7 +140,7 @@ public sealed class KafkaTestProducer : IDisposable
         await PublishAsync(topic, correlationId, envelope, cancellationToken);
     }
 
-    public async Task PublishInvalidOrderCompletedAsync(
+    public async Task PublishInvalidPaymentSucceededAsync(
         string topic,
         Guid correlationId,
         Guid orderId,
@@ -151,8 +151,8 @@ public sealed class KafkaTestProducer : IDisposable
         {
             eventId = Guid.NewGuid(),
             correlationId,
-            eventType = "ORDER_COMPLETED",
-            service = "shop-service",
+            eventType = "PAYMENT_SUCCEEDED",
+            service = "billing-service",
             timestamp = DateTimeOffset.UtcNow,
             payload = new
             {
@@ -172,7 +172,7 @@ public sealed class KafkaTestProducer : IDisposable
                 }
             },
             previousEventId = (Guid?)null,
-            actor = "shop-service",
+            actor = "billing-service",
             statusCode = "SUCCESS"
         };
 

@@ -1,8 +1,9 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: 'app-status-chip',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<span [class]="statusClass">{{ label }}</span>'
 })
 export class StatusChipComponent {

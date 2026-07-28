@@ -44,6 +44,40 @@ public sealed class AppendAuditSnapshotUseCaseTests
             "SUCCESS"), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenEventIdIsRepeated_DoesNotAppendSecondSnapshot()
+    {
+        var repository = new InMemoryAuditSnapshotRepository();
+        var useCase = new AppendAuditSnapshotUseCase(repository);
+        var eventId = Guid.NewGuid();
+        var command = new CreateAuditSnapshotCommand(
+            Guid.NewGuid(), "ORDER_COMPLETED", "shop-service", new Dictionary<string, object?>(),
+            null, "shop-service", "SUCCESS", eventId);
+
+        var first = await useCase.ExecuteAsync(command, CancellationToken.None);
+        var second = await useCase.ExecuteAsync(command, CancellationToken.None);
+
+        Assert.Equal(first.Id, second.Id);
+        Assert.Single(repository.Snapshots);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenPreviousEventIdIsMissing_LinksToLatestSnapshot()
+    {
+        var repository = new InMemoryAuditSnapshotRepository();
+        var useCase = new AppendAuditSnapshotUseCase(repository);
+        var correlationId = Guid.NewGuid();
+
+        var first = await useCase.ExecuteAsync(new CreateAuditSnapshotCommand(
+            correlationId, "ORDER_PLACED", "shop-service", new Dictionary<string, object?>(),
+            null, "shop-service", "SUCCESS"), CancellationToken.None);
+        var second = await useCase.ExecuteAsync(new CreateAuditSnapshotCommand(
+            correlationId, "WAREHOUSE_RESERVED", "warehouse-service", new Dictionary<string, object?>(),
+            null, "warehouse-service", "SUCCESS"), CancellationToken.None);
+
+        Assert.Equal(first.Id, second.PreviousEventId);
+    }
+
     private sealed class InMemoryAuditSnapshotRepository : IAuditSnapshotRepository
     {
         public List<AuditSnapshot> Snapshots { get; } = [];
@@ -53,6 +87,16 @@ public sealed class AppendAuditSnapshotUseCaseTests
             Snapshots.Add(snapshot);
             return Task.CompletedTask;
         }
+
+        public Task<AuditSnapshot?> FindByIdAsync(Guid eventId, CancellationToken cancellationToken) =>
+            Task.FromResult(Snapshots.SingleOrDefault(snapshot => snapshot.Id == eventId));
+
+        public Task<AuditSnapshot?> FindLatestByCorrelationIdAsync(Guid correlationId, CancellationToken cancellationToken) =>
+            Task.FromResult(Snapshots
+                .Where(snapshot => snapshot.CorrelationId == correlationId)
+                .OrderByDescending(snapshot => snapshot.Timestamp)
+                .ThenByDescending(snapshot => snapshot.Id)
+                .FirstOrDefault());
 
         public Task<IReadOnlyList<AuditSnapshot>> FindByCorrelationIdAsync(Guid correlationId, CancellationToken cancellationToken)
         {

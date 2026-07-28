@@ -1,14 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { CartService } from './cart.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-cart-page',
-  standalone: true,
-  imports: [CurrencyPipe, RouterLink, PageHeaderComponent],
-  template: `
+    selector: 'app-cart-page',
+    imports: [CurrencyPipe, RouterLink, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Checkout"
       title="Your cart"

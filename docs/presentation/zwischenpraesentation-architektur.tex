@@ -193,9 +193,9 @@
         \draw[rest] (shop) -- node[note, right] {Zahlung} (billing);
         \draw[rest] (billing) -- node[note, above] {Payment API} (payment);
 
-        \draw[kafkaevent] (billing) -- node[note, right] {\texttt{PaymentSucceeded}} (kafka);
+        \draw[kafkaevent] (billing) -- node[note, right] {\texttt{PAYMENT\_SUCCEEDED}} (kafka);
         \draw[kafkaevent] (kafka) -- node[note, above, sloped] {AuditEvents} (audit);
-        \draw[kafkaevent] (kafka) -- node[note, above, sloped] {PaymentSucceeded} (invoice);
+        \draw[kafkaevent] (kafka) -- node[note, above, sloped] {\texttt{PAYMENT\_SUCCEEDED}} (invoice);
 
         \node[note, text width=4.2cm] at (-4.75,1.25) {Alle Services schreiben wichtige Ereignisse als AuditEvents nach Kafka.};
 

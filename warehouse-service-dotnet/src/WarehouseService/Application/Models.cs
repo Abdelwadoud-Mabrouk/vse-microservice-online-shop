@@ -27,4 +27,25 @@ public sealed record ReservationDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt);
 
-public sealed record ReservationResult(bool Success, string Message, ReservationDto? Reservation);
+public sealed record ReservationResult(
+    bool Success,
+    string Message,
+    ReservationDto? Reservation,
+    bool IsReplay = false,
+    bool IsConflict = false);
+
+public enum ReservationTransitionOutcome
+{
+    Applied,
+    AlreadyApplied,
+    NotFound,
+    Conflict
+}
+
+public sealed record ReservationTransitionResult(
+    ReservationTransitionOutcome Outcome,
+    string Message,
+    ReservationDto? Reservation)
+{
+    public bool Success => Outcome is ReservationTransitionOutcome.Applied or ReservationTransitionOutcome.AlreadyApplied;
+}

@@ -1,14 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe, DatePipe } from '@angular/common';
 import { WarehouseApiService } from '../../core/api/warehouse-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { StatusChipComponent } from '../../shared/components/status-chip.component';
 
 @Component({
-  selector: 'app-reservation-overview-page',
-  standalone: true,
-  imports: [AsyncPipe, DatePipe, PageHeaderComponent, StatusChipComponent],
-  template: `
+    selector: 'app-reservation-overview-page',
+    imports: [AsyncPipe, DatePipe, PageHeaderComponent, StatusChipComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Warehouse"
       title="Reservations"

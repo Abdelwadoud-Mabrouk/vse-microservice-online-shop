@@ -1,12 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
-  selector: 'app-login-page',
-  standalone: true,
-  imports: [FormsModule],
-  template: `
+    selector: 'app-login-page',
+    imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <main class="login-page">
       <section class="login-panel">
         <span class="eyebrow">WohnWerk access</span>

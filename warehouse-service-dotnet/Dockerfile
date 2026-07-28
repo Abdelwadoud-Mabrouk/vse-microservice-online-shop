@@ -1,11 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY src/WarehouseService/WarehouseService.csproj src/WarehouseService/
-RUN dotnet restore src/WarehouseService/WarehouseService.csproj
+COPY warehouse-service-dotnet/src/WarehouseService/WarehouseService.csproj warehouse-service-dotnet/src/WarehouseService/
+COPY dotnet-shared/ dotnet-shared/
+RUN dotnet restore warehouse-service-dotnet/src/WarehouseService/WarehouseService.csproj
 
-COPY src/WarehouseService/ src/WarehouseService/
-RUN dotnet publish src/WarehouseService/WarehouseService.csproj -c Release -o /app/publish
+COPY warehouse-service-dotnet/src/WarehouseService/ warehouse-service-dotnet/src/WarehouseService/
+RUN dotnet publish warehouse-service-dotnet/src/WarehouseService/WarehouseService.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app

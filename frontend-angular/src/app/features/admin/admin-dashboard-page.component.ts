@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
@@ -6,10 +6,10 @@ import { AdminApiService } from '../../core/api/admin-api.service';
 import { AuditApiService } from '../../core/api/audit-api.service';
 
 @Component({
-  selector: 'app-admin-dashboard-page',
-  standalone: true,
-  imports: [AsyncPipe, RouterLink, PageHeaderComponent],
-  template: `
+    selector: 'app-admin-dashboard-page',
+    imports: [AsyncPipe, RouterLink, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Operations center"

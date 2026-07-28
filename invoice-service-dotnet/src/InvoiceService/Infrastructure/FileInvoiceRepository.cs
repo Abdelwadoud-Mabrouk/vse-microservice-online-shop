@@ -40,6 +40,21 @@ public sealed class FileInvoiceRepository : IInvoiceRepository
         return await JsonSerializer.DeserializeAsync<Invoice>(stream, _jsonOptions, cancellationToken);
     }
 
+    public async Task<Invoice?> FindByTransactionIdAsync(string transactionId, CancellationToken cancellationToken)
+    {
+        foreach (var path in Directory.EnumerateFiles(_metadataDirectory, "*.json"))
+        {
+            await using var stream = File.OpenRead(path);
+            var invoice = await JsonSerializer.DeserializeAsync<Invoice>(stream, _jsonOptions, cancellationToken);
+            if (invoice is not null && string.Equals(invoice.TransactionId, transactionId, StringComparison.Ordinal))
+            {
+                return invoice;
+            }
+        }
+
+        return null;
+    }
+
     public async Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken)
     {
         var invoices = new List<Invoice>();

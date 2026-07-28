@@ -38,6 +38,15 @@ public sealed class ReserveStockUseCase(
             return result;
         }
 
+        if (result.IsReplay)
+        {
+            _logger.LogInformation(
+                "Existing reservation {ReservationId} returned for order {OrderId} because an idempotent retry was detected",
+                result.Reservation!.ReservationId,
+                command.OrderId);
+            return result;
+        }
+
         _logger.LogInformation(
             "Stock reserved for order {OrderId} with reservation {ReservationId} and status {Status}",
             command.OrderId,

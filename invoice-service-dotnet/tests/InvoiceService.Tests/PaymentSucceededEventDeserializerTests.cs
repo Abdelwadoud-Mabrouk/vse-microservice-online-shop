@@ -3,7 +3,7 @@ using InvoiceService.Infrastructure.Kafka;
 
 namespace InvoiceService.Tests;
 
-public sealed class OrderCompletedEventDeserializerTests
+public sealed class PaymentSucceededEventDeserializerTests
 {
     [Fact]
     public void Deserialize_ReadsEnvelopeMessage()
@@ -12,8 +12,8 @@ public sealed class OrderCompletedEventDeserializerTests
         {
           "eventId": "11111111-1111-4111-8111-111111111111",
           "correlationId": "22222222-2222-4222-8222-222222222222",
-          "eventType": "ORDER_COMPLETED",
-          "source": "shop-service",
+          "eventType": "PAYMENT_SUCCEEDED",
+          "source": "billing-service",
           "timestamp": "2026-05-23T07:30:00Z",
           "payload": {
             "orderId": "33333333-3333-4333-8333-333333333333",
@@ -43,14 +43,14 @@ public sealed class OrderCompletedEventDeserializerTests
         }
         """;
 
-        var orderEvent = OrderCompletedEventDeserializer.Deserialize(message);
+        var paymentEvent = PaymentSucceededEventDeserializer.Deserialize(message);
 
-        Assert.Equal(Guid.Parse("22222222-2222-4222-8222-222222222222"), orderEvent.CorrelationId);
-        Assert.Equal(Guid.Parse("33333333-3333-4333-8333-333333333333"), orderEvent.OrderId);
-        Assert.Equal("ORDER_COMPLETED", orderEvent.EventType);
-        Assert.Equal("shop-service", orderEvent.Service);
-        Assert.Equal("EUR", orderEvent.ToCommand(3).Payment.Currency);
-        Assert.Single(orderEvent.Items);
+        Assert.Equal(Guid.Parse("22222222-2222-4222-8222-222222222222"), paymentEvent.CorrelationId);
+        Assert.Equal(Guid.Parse("33333333-3333-4333-8333-333333333333"), paymentEvent.OrderId);
+        Assert.Equal("PAYMENT_SUCCEEDED", paymentEvent.EventType);
+        Assert.Equal("billing-service", paymentEvent.Service);
+        Assert.Equal("EUR", paymentEvent.ToCommand(3).Payment.Currency);
+        Assert.Single(paymentEvent.Items);
     }
 
     [Fact]
@@ -83,12 +83,12 @@ public sealed class OrderCompletedEventDeserializerTests
         }
         """;
 
-        var orderEvent = OrderCompletedEventDeserializer.Deserialize(message);
+        var paymentEvent = PaymentSucceededEventDeserializer.Deserialize(message);
 
-        Assert.Equal(Guid.Parse("44444444-4444-4444-8444-444444444444"), orderEvent.CorrelationId);
-        Assert.Equal("ORDER_COMPLETED", orderEvent.EventType);
-        Assert.Equal("shop-service", orderEvent.Service);
-        Assert.Equal("tx-test-002", orderEvent.TransactionId);
+        Assert.Equal(Guid.Parse("44444444-4444-4444-8444-444444444444"), paymentEvent.CorrelationId);
+        Assert.Equal("PAYMENT_SUCCEEDED", paymentEvent.EventType);
+        Assert.Equal("billing-service", paymentEvent.Service);
+        Assert.Equal("tx-test-002", paymentEvent.TransactionId);
     }
 
     [Fact]
@@ -101,12 +101,12 @@ public sealed class OrderCompletedEventDeserializerTests
         }
         """;
 
-        Assert.False(OrderCompletedEventDeserializer.CanHandle(message));
+        Assert.False(PaymentSucceededEventDeserializer.CanHandle(message));
     }
 
     [Fact]
     public void Deserialize_RejectsMalformedMessage()
     {
-        Assert.ThrowsAny<JsonException>(() => OrderCompletedEventDeserializer.Deserialize("not-json"));
+        Assert.ThrowsAny<JsonException>(() => PaymentSucceededEventDeserializer.Deserialize("not-json"));
     }
 }

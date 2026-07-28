@@ -17,4 +17,8 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../dotnet-shared/Logging/DailyJsonFileLoggerProvider.cs"
+             Link="Shared/Logging/DailyJsonFileLoggerProvider.cs" />
+  </ItemGroup>
 </Project>

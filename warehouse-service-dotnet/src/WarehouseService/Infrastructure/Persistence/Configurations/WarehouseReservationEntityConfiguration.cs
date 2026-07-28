@@ -42,6 +42,7 @@ public sealed class WarehouseReservationEntityConfiguration : IEntityTypeConfigu
             .HasForeignKey(item => item.ReservationId);
 
         builder.HasIndex(reservation => reservation.OrderId)
+            .IsUnique()
             .HasDatabaseName("ix_warehouse_reservations_order");
 
         builder.HasIndex(reservation => reservation.CorrelationId)

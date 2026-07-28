@@ -2,37 +2,24 @@ import { Routes } from '@angular/router';
 import { ShellComponent } from './core/layout/shell.component';
 import { authGuard } from './core/auth/auth.guard';
 import { roleGuard } from './core/auth/role.guard';
-import { LoginPageComponent } from './features/auth/login-page.component';
-import { RegisterPageComponent } from './features/auth/register-page.component';
-import { CartPageComponent } from './features/shop/cart-page.component';
-import { OrderStatusPageComponent } from './features/shop/order-status-page.component';
-import { CustomerProfilePageComponent } from './features/customer/customer-profile-page.component';
-import { CustomerOrdersPageComponent } from './features/customer/customer-orders-page.component';
-import { CustomerAddressesPageComponent } from './features/customer/customer-addresses-page.component';
-import { AdminDashboardPageComponent } from './features/admin/admin-dashboard-page.component';
-import { ProductEditPageComponent } from './features/admin/product-edit-page.component';
-import { CustomerManagementPageComponent } from './features/admin/customer-management-page.component';
-import { OrderOverviewPageComponent } from './features/admin/order-overview-page.component';
-import { AuditSearchPageComponent } from './features/admin/audit-search-page.component';
-import { InvoiceOverviewPageComponent } from './features/admin/invoice-overview-page.component';
-import { SystemStatusPageComponent } from './features/admin/system-status-page.component';
-import { WarehouseDashboardPageComponent } from './features/warehouse/warehouse-dashboard-page.component';
-import { StockOverviewPageComponent } from './features/warehouse/stock-overview-page.component';
-import { StockEditPageComponent } from './features/warehouse/stock-edit-page.component';
-import { ReservationOverviewPageComponent } from './features/warehouse/reservation-overview-page.component';
-import { ObservabilityPageComponent } from './features/observability/observability-page.component';
-import {ProductListComponentComponent} from "./features/shop/product-list-component/product-list-component.component";
-import {CheckoutComponentComponent} from "./features/shop/checkout-component/checkout-component.component";
-import {
-  CheckoutSuccessComponent
-} from "./features/shop/checkout-component/checkout-success-component/checkout-success.component";
-import {ProductDetailComponent} from "./features/shop/product-detail/product-detail.component";
-import {PaymentErrorComponent} from "./features/shop/checkout-component/payment-error/payment-error.component";
+import { ProductListComponentComponent } from './features/shop/product-list-component/product-list-component.component';
+import { CheckoutComponentComponent } from './features/shop/checkout-component/checkout-component.component';
+import { CheckoutSuccessComponent } from './features/shop/checkout-component/checkout-success-component/checkout-success.component';
+import { ProductDetailComponent } from './features/shop/product-detail/product-detail.component';
+import { PaymentErrorComponent } from './features/shop/checkout-component/payment-error/payment-error.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'shop/products', pathMatch: 'full' },
-  { path: 'auth/login', component: LoginPageComponent },
-  { path: 'auth/register', component: RegisterPageComponent },
+  {
+    path: 'auth/login',
+    loadComponent: () => import('./features/auth/login-page.component')
+      .then(module => module.LoginPageComponent)
+  },
+  {
+    path: 'auth/register',
+    loadComponent: () => import('./features/auth/register-page.component')
+      .then(module => module.RegisterPageComponent)
+  },
   {
     path: '',
     component: ShellComponent,
@@ -43,15 +30,24 @@ export const routes: Routes = [
           { path: '', redirectTo: 'products', pathMatch: 'full' },
           { path: 'products', component: ProductListComponentComponent },
           { path: 'products/:slug', component: ProductDetailComponent },
-          { path: 'cart', component: CartPageComponent },
-          { path: 'checkout', component: CheckoutComponentComponent},
+          {
+            path: 'cart',
+            loadComponent: () => import('./features/shop/cart-page.component')
+              .then(module => module.CartPageComponent)
+          },
+          { path: 'checkout', component: CheckoutComponentComponent },
           {
             path: 'checkout-error',
             component: PaymentErrorComponent
           },
-          { path: 'orders/:id', component: OrderStatusPageComponent, canActivate: [authGuard] },
           {
-            path:'checkout/success',
+            path: 'orders/:id',
+            loadComponent: () => import('./features/shop/order-status-page.component')
+              .then(module => module.OrderStatusPageComponent),
+            canActivate: [authGuard]
+          },
+          {
+            path: 'checkout/success',
             component: CheckoutSuccessComponent
           }
         ]
@@ -60,9 +56,21 @@ export const routes: Routes = [
         path: 'account',
         canActivate: [authGuard],
         children: [
-          { path: '', component: CustomerProfilePageComponent },
-          { path: 'orders', component: CustomerOrdersPageComponent },
-          { path: 'addresses', component: CustomerAddressesPageComponent }
+          {
+            path: '',
+            loadComponent: () => import('./features/customer/customer-profile-page.component')
+              .then(module => module.CustomerProfilePageComponent)
+          },
+          {
+            path: 'orders',
+            loadComponent: () => import('./features/customer/customer-orders-page.component')
+              .then(module => module.CustomerOrdersPageComponent)
+          },
+          {
+            path: 'addresses',
+            loadComponent: () => import('./features/customer/customer-addresses-page.component')
+              .then(module => module.CustomerAddressesPageComponent)
+          }
         ]
       },
       {
@@ -70,15 +78,47 @@ export const routes: Routes = [
         canActivate: [roleGuard],
         data: { roles: ['ADMIN'] },
         children: [
-          { path: '', component: AdminDashboardPageComponent },
+          {
+            path: '',
+            loadComponent: () => import('./features/admin/admin-dashboard-page.component')
+              .then(module => module.AdminDashboardPageComponent)
+          },
           { path: 'products', component: ProductListComponentComponent },
-          { path: 'products/new', component: ProductEditPageComponent },
-          { path: 'products/:id/edit', component: ProductEditPageComponent },
-          { path: 'customers', component: CustomerManagementPageComponent },
-          { path: 'orders', component: OrderOverviewPageComponent },
-          { path: 'audit', component: AuditSearchPageComponent },
-          { path: 'system', component: SystemStatusPageComponent },
-          { path: 'invoices', component: InvoiceOverviewPageComponent }
+          {
+            path: 'products/new',
+            loadComponent: () => import('./features/admin/product-edit-page.component')
+              .then(module => module.ProductEditPageComponent)
+          },
+          {
+            path: 'products/:id/edit',
+            loadComponent: () => import('./features/admin/product-edit-page.component')
+              .then(module => module.ProductEditPageComponent)
+          },
+          {
+            path: 'customers',
+            loadComponent: () => import('./features/admin/customer-management-page.component')
+              .then(module => module.CustomerManagementPageComponent)
+          },
+          {
+            path: 'orders',
+            loadComponent: () => import('./features/admin/order-overview-page.component')
+              .then(module => module.OrderOverviewPageComponent)
+          },
+          {
+            path: 'audit',
+            loadComponent: () => import('./features/admin/audit-search-page.component')
+              .then(module => module.AuditSearchPageComponent)
+          },
+          {
+            path: 'system',
+            loadComponent: () => import('./features/admin/system-status-page.component')
+              .then(module => module.SystemStatusPageComponent)
+          },
+          {
+            path: 'invoices',
+            loadComponent: () => import('./features/admin/invoice-overview-page.component')
+              .then(module => module.InvoiceOverviewPageComponent)
+          }
         ]
       },
       {
@@ -86,17 +126,34 @@ export const routes: Routes = [
         canActivate: [roleGuard],
         data: { roles: ['WAREHOUSE'] },
         children: [
-          { path: '', component: WarehouseDashboardPageComponent },
-          { path: 'stock', component: StockOverviewPageComponent },
-          { path: 'stock/:id/edit', component: StockEditPageComponent },
-          { path: 'reservations', component: ReservationOverviewPageComponent }
+          {
+            path: '',
+            loadComponent: () => import('./features/warehouse/warehouse-dashboard-page.component')
+              .then(module => module.WarehouseDashboardPageComponent)
+          },
+          {
+            path: 'stock',
+            loadComponent: () => import('./features/warehouse/stock-overview-page.component')
+              .then(module => module.StockOverviewPageComponent)
+          },
+          {
+            path: 'stock/:id/edit',
+            loadComponent: () => import('./features/warehouse/stock-edit-page.component')
+              .then(module => module.StockEditPageComponent)
+          },
+          {
+            path: 'reservations',
+            loadComponent: () => import('./features/warehouse/reservation-overview-page.component')
+              .then(module => module.ReservationOverviewPageComponent)
+          }
         ]
       },
       {
         path: 'observability',
         canActivate: [roleGuard],
         data: { roles: ['ADMIN', 'WAREHOUSE'] },
-        component: ObservabilityPageComponent
+        loadComponent: () => import('./features/observability/observability-page.component')
+          .then(module => module.ObservabilityPageComponent)
       }
     ]
   },

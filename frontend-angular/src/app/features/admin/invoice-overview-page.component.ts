@@ -1,13 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe, CurrencyPipe, DatePipe } from '@angular/common';
 import { InvoiceApiService } from '../../core/api/invoice-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-invoice-overview-page',
-  standalone: true,
-  imports: [AsyncPipe, CurrencyPipe, DatePipe, PageHeaderComponent],
-  template: `
+    selector: 'app-invoice-overview-page',
+    imports: [AsyncPipe, CurrencyPipe, DatePipe, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Invoices"

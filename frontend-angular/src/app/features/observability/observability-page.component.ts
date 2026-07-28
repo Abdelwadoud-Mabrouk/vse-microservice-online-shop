@@ -1,13 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { AdminApiService } from '../../core/api/admin-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-observability-page',
-  standalone: true,
-  imports: [AsyncPipe, PageHeaderComponent],
-  template: `
+    selector: 'app-observability-page',
+    imports: [AsyncPipe, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Observability"
       title="Monitoring & diagnostics"

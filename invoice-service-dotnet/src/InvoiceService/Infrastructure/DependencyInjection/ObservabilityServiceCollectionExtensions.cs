@@ -1,6 +1,7 @@
 using System.Text.Json;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
+using OnlineShop.Shared.Logging;
 
 namespace InvoiceService.Infrastructure.DependencyInjection;
 
@@ -24,6 +25,10 @@ public static class ObservabilityServiceCollectionExtensions
             options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
             options.JsonWriterOptions = new JsonWriterOptions { Indented = false };
         });
+        builder.Logging.AddDailyJsonFile(
+            builder.Configuration,
+            builder.Environment.ContentRootPath,
+            serviceName);
         builder.Logging.AddOpenTelemetry(options =>
         {
             options.IncludeFormattedMessage = true;

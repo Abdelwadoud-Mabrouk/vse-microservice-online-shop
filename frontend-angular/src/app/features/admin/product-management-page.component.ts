@@ -1,14 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe, CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ShopApiService } from '../../core/api/shop-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-product-management-page',
-  standalone: true,
-  imports: [AsyncPipe, CurrencyPipe, RouterLink, PageHeaderComponent],
-  template: `
+    selector: 'app-product-management-page',
+    imports: [AsyncPipe, CurrencyPipe, RouterLink, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Product Management"

@@ -4,7 +4,7 @@ public sealed class KafkaConsumerOptions
 {
     public string? BootstrapServers { get; init; }
 
-    public string OrdersTopic { get; init; } = "orders";
+    public string PaymentSucceededTopic { get; init; } = "billing";
 
     public string ConsumerGroupId { get; init; } = "invoice-service";
 

@@ -1,13 +1,13 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { AuditEvent } from '../../core/models/audit-event.model';
 import { StatusChipComponent } from './status-chip.component';
 
 @Component({
-  selector: 'app-audit-timeline',
-  standalone: true,
-  imports: [DatePipe, JsonPipe, StatusChipComponent],
-  template: `
+    selector: 'app-audit-timeline',
+    imports: [DatePipe, JsonPipe, StatusChipComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <div class="timeline">
       @for (event of events; track event.id) {
         <article class="timeline-item">

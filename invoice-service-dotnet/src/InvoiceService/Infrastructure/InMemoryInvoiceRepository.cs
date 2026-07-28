@@ -22,6 +22,13 @@ public sealed class InMemoryInvoiceRepository : IInvoiceRepository
         return Task.FromResult(invoice);
     }
 
+    public Task<Invoice?> FindByTransactionIdAsync(string transactionId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_invoices.Values.SingleOrDefault(invoice =>
+            string.Equals(invoice.TransactionId, transactionId, StringComparison.Ordinal)));
+    }
+
     public Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

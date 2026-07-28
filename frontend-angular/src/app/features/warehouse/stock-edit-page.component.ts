@@ -1,14 +1,14 @@
-import { Component, Input, OnChanges, signal } from '@angular/core';
+import { Component, Input, OnChanges, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { WarehouseApiService } from '../../core/api/warehouse-api.service';
 import { StockItem } from '../../core/models/stock.model';
 
 @Component({
-  selector: 'app-stock-edit-page',
-  standalone: true,
-  imports: [FormsModule, PageHeaderComponent],
-  template: `
+    selector: 'app-stock-edit-page',
+    imports: [FormsModule, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Warehouse"
       title="Edit Stock"

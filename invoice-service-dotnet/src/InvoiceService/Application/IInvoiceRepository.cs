@@ -8,5 +8,7 @@ public interface IInvoiceRepository
 
     Task<Invoice?> FindAsync(Guid invoiceId, CancellationToken cancellationToken);
 
+    Task<Invoice?> FindByTransactionIdAsync(string transactionId, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Invoice>> FindByCustomerEmailAsync(string customerEmail, CancellationToken cancellationToken);
 }

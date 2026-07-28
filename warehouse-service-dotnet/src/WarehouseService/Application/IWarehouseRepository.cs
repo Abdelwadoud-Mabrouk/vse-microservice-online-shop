@@ -18,7 +18,7 @@ public interface IWarehouseRepository
 
     ReservationResult TryReserve(ReserveStockCommand command);
 
-    Reservation? Cancel(Guid reservationId);
+    ReservationTransitionResult Cancel(Guid reservationId);
 
-    Reservation? Commit(Guid reservationId);
+    ReservationTransitionResult Commit(Guid reservationId);
 }

@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe, CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ShopApiService } from '../../core/api/shop-api.service';
@@ -13,10 +13,10 @@ import {
 } from '../../shared/product-presentation';
 
 @Component({
-  selector: 'app-product-list-page',
-  standalone: true,
-  imports: [AsyncPipe, CurrencyPipe, RouterLink],
-  template: `
+    selector: 'app-product-list-page',
+    imports: [AsyncPipe, CurrencyPipe, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <section class="shop-hero">
       <div class="shop-hero-copy">
         <span class="eyebrow">Furniture collection 2026</span>

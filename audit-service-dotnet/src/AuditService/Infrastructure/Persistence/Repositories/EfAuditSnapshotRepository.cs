@@ -28,7 +28,25 @@ public sealed class EfAuditSnapshotRepository(
         });
 
         dbContext.AuditSnapshots.Add(ToEntity(snapshot));
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            dbContext.ChangeTracker.Clear();
+            if (!await dbContext.AuditSnapshots.AsNoTracking().AnyAsync(
+                    value => value.Id == snapshot.Id,
+                    cancellationToken))
+            {
+                throw;
+            }
+
+            logger.LogInformation(
+                "Duplicate audit event {EventId} ignored during concurrent persistence",
+                snapshot.Id);
+            return;
+        }
 
         logger.LogInformation(
             "Audit snapshot {AuditSnapshotId} persisted for event {EventType} with status {Status} in {DurationMs} ms",
@@ -36,6 +54,27 @@ public sealed class EfAuditSnapshotRepository(
             snapshot.EventType,
             "SUCCESS",
             stopwatch.ElapsedMilliseconds);
+    }
+
+    public async Task<AuditSnapshot?> FindByIdAsync(Guid eventId, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.AuditSnapshots
+            .AsNoTracking()
+            .SingleOrDefaultAsync(snapshot => snapshot.Id == eventId, cancellationToken);
+        return entity is null ? null : ToDomain(entity);
+    }
+
+    public async Task<AuditSnapshot?> FindLatestByCorrelationIdAsync(
+        Guid correlationId,
+        CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.AuditSnapshots
+            .AsNoTracking()
+            .Where(snapshot => snapshot.CorrelationId == correlationId)
+            .OrderByDescending(snapshot => snapshot.TimestampUtc)
+            .ThenByDescending(snapshot => snapshot.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        return entity is null ? null : ToDomain(entity);
     }
 
     public async Task<IReadOnlyList<AuditSnapshot>> FindByCorrelationIdAsync(Guid correlationId, CancellationToken cancellationToken)

@@ -198,17 +198,19 @@ public static class WarehouseEndpoints
         var result = await useCase.ExecuteAsync(request.ToCommand(correlationId), cancellationToken);
         if (!result.Success)
         {
-            LogBusinessFailure(logger, "warehouse.reservation.reserve", "OUT_OF_STOCK", result.Message, stopwatch.ElapsedMilliseconds);
+            LogBusinessFailure(logger, "warehouse.reservation.reserve", result.IsConflict ? "IDEMPOTENCY_CONFLICT" : "OUT_OF_STOCK", result.Message, stopwatch.ElapsedMilliseconds);
             return Results.Conflict(new ProblemDetails
             {
-                Title = "Insufficient stock",
+                Title = result.IsConflict ? "Idempotency conflict" : "Insufficient stock",
                 Detail = result.Message,
                 Status = StatusCodes.Status409Conflict
             });
         }
 
         LogSuccess(logger, "warehouse.reservation.reserve", stopwatch.ElapsedMilliseconds);
-        return Results.Created($"/reservations/{result.Reservation!.ReservationId}", result.Reservation);
+        return result.IsReplay
+            ? Results.Ok(result.Reservation)
+            : Results.Created($"/reservations/{result.Reservation!.ReservationId}", result.Reservation);
     }
 
     private static ProblemDetails ToProblem(string title, string detail, int status)
@@ -233,15 +235,19 @@ public static class WarehouseEndpoints
         var correlationId = context.GetCorrelationId();
         using var scope = BeginWarehouseScope(logger, correlationId, "warehouse.reservation.cancel", "/reservations/{reservationId}", reservationId, null);
 
-        var reservation = await useCase.ExecuteAsync(reservationId, correlationId, cancellationToken);
-        if (reservation is null)
+        var result = await useCase.ExecuteAsync(reservationId, correlationId, cancellationToken);
+        if (!result.Success)
         {
-            LogBusinessFailure(logger, "warehouse.reservation.cancel", "RESERVATION_NOT_FOUND", "Reservation was not found.", stopwatch.ElapsedMilliseconds);
-            return Results.NotFound();
+            var status = result.Outcome == ReservationTransitionOutcome.NotFound
+                ? StatusCodes.Status404NotFound
+                : StatusCodes.Status409Conflict;
+            LogBusinessFailure(logger, "warehouse.reservation.cancel", status == 404 ? "RESERVATION_NOT_FOUND" : "INVALID_RESERVATION_STATE", result.Message, stopwatch.ElapsedMilliseconds);
+            var problem = ToProblem("Reservation could not be cancelled", result.Message, status);
+            return status == 404 ? Results.NotFound(problem) : Results.Conflict(problem);
         }
 
         LogSuccess(logger, "warehouse.reservation.cancel", stopwatch.ElapsedMilliseconds);
-        return Results.Ok(reservation);
+        return Results.Ok(result.Reservation);
     }
 
     private static async Task<IResult> CommitAsync(
@@ -256,15 +262,33 @@ public static class WarehouseEndpoints
         var correlationId = context.GetCorrelationId();
         using var scope = BeginWarehouseScope(logger, correlationId, "warehouse.reservation.commit", "/reservations/{reservationId}/commit", reservationId, null);
 
-        var reservation = await useCase.ExecuteAsync(reservationId, correlationId, cancellationToken);
-        if (reservation is null)
+        ReservationTransitionResult result;
+        try
         {
-            LogBusinessFailure(logger, "warehouse.reservation.commit", "RESERVATION_NOT_FOUND", "Reservation was not found.", stopwatch.ElapsedMilliseconds);
-            return Results.NotFound();
+            result = await useCase.ExecuteAsync(reservationId, correlationId, cancellationToken);
+        }
+        catch (CommitFailureSimulationException exception)
+        {
+            logger.LogError(exception, "Controlled commit failure for reservation {ReservationId}", reservationId);
+            return Results.Problem(
+                title: "Warehouse commit failed",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status500InternalServerError,
+                extensions: new Dictionary<string, object?> { ["errorCode"] = "COMMIT_FAILURE_SIMULATED" });
+        }
+
+        if (!result.Success)
+        {
+            var status = result.Outcome == ReservationTransitionOutcome.NotFound
+                ? StatusCodes.Status404NotFound
+                : StatusCodes.Status409Conflict;
+            LogBusinessFailure(logger, "warehouse.reservation.commit", status == 404 ? "RESERVATION_NOT_FOUND" : "INVALID_RESERVATION_STATE", result.Message, stopwatch.ElapsedMilliseconds);
+            var problem = ToProblem("Reservation could not be committed", result.Message, status);
+            return status == 404 ? Results.NotFound(problem) : Results.Conflict(problem);
         }
 
         LogSuccess(logger, "warehouse.reservation.commit", stopwatch.ElapsedMilliseconds);
-        return Results.Ok(reservation);
+        return Results.Ok(result.Reservation);
     }
 
     private static IDisposable? BeginWarehouseScope(

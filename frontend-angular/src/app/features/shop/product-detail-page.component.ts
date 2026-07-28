@@ -7,10 +7,10 @@ import {ProductServiceService} from "../../core/service/product-service.service"
 import { furnitureCategoryLabel, furnitureImageStyle } from '../../shared/product-presentation';
 
 @Component({
-  selector: 'app-product-detail-page',
-  standalone: true,
-  imports: [AsyncPipe, CurrencyPipe],
-  template: `
+    selector: 'app-product-detail-page',
+    imports: [AsyncPipe, CurrencyPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     @if (product$ | async; as product) {
       <section class="furniture-detail">
         <div class="detail-gallery">

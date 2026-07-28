@@ -42,7 +42,7 @@ public sealed class WorstCaseFlowTests
     }
 
     [Fact]
-    public async Task Invoice_service_ignores_invalid_order_completed_event_without_creating_invoice()
+    public async Task Invoice_service_ignores_invalid_payment_succeeded_event_without_creating_invoice()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var settings = EndToEndTestSettings.FromEnvironment();
@@ -54,13 +54,32 @@ public sealed class WorstCaseFlowTests
         var customerEmail = $"invalid-payment-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}@example.com";
 
         await client.AssertHealthyAsync(cts.Token);
-        await kafka.PublishInvalidOrderCompletedAsync(
-            settings.OrdersTopic,
+        await kafka.PublishInvalidPaymentSucceededAsync(
+            settings.BillingTopic,
             correlationId,
             orderId,
             customerEmail,
             cts.Token);
 
         await client.AssertNoInvoiceAsync(customerEmail, cts.Token);
+    }
+
+    [Fact]
+    public async Task Parallel_identical_reservations_return_one_reservation_and_reduce_stock_once()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        var settings = EndToEndTestSettings.FromEnvironment();
+        using var client = new DotNetServiceClient(settings);
+        var orderId = Guid.NewGuid();
+
+        await client.AssertHealthyAsync(cts.Token);
+        await client.EnsureProductAsync(TestData.Chair, 10, cts.Token);
+
+        var requests = Enumerable.Range(0, 8)
+            .Select(_ => client.ReserveAsync(Guid.NewGuid(), orderId, TestData.Chair, 1, cts.Token));
+        var reservationIds = await Task.WhenAll(requests);
+
+        Assert.Single(reservationIds.Distinct());
+        Assert.Equal(9, await client.GetAvailableQuantityAsync(TestData.Chair, cts.Token));
     }
 }

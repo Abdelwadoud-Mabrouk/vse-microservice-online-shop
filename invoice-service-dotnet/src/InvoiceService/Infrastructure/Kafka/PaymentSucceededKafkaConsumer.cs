@@ -5,10 +5,10 @@ using InvoiceService.Application;
 
 namespace InvoiceService.Infrastructure.Kafka;
 
-public sealed class OrderCompletedKafkaConsumer(
+public sealed class PaymentSucceededKafkaConsumer(
     IServiceScopeFactory scopeFactory,
     KafkaConsumerOptions options,
-    ILogger<OrderCompletedKafkaConsumer> logger,
+    ILogger<PaymentSucceededKafkaConsumer> logger,
     IConfiguration configuration) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -17,7 +17,7 @@ public sealed class OrderCompletedKafkaConsumer(
         {
             logger.LogInformation(
                 "Kafka consumer disabled for operation {Operation}. Set KAFKA_BOOTSTRAP_SERVERS to enable it.",
-                "invoice.kafka.order_completed.consume");
+                "invoice.kafka.payment_succeeded.consume");
             return;
         }
 
@@ -45,11 +45,11 @@ public sealed class OrderCompletedKafkaConsumer(
                 }
             })
             .Build();
-        consumer.Subscribe(options.OrdersTopic);
+        consumer.Subscribe(options.PaymentSucceededTopic);
 
         logger.LogInformation(
             "Kafka consumer subscribed to topic {Topic} with group {ConsumerGroupId}",
-            options.OrdersTopic,
+            options.PaymentSucceededTopic,
             options.ConsumerGroupId);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -97,7 +97,7 @@ public sealed class OrderCompletedKafkaConsumer(
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        var operation = "invoice.kafka.order_completed.consume";
+        var operation = "invoice.kafka.payment_succeeded.consume";
 
         logger.LogInformation(
             "Kafka message received from topic {Topic}, partition {Partition}, offset {Offset}",
@@ -107,10 +107,10 @@ public sealed class OrderCompletedKafkaConsumer(
 
         try
         {
-            if (!OrderCompletedEventDeserializer.CanHandle(result.Message.Value))
+            if (!PaymentSucceededEventDeserializer.CanHandle(result.Message.Value))
             {
                 logger.LogDebug(
-                    "Kafka message ignored because eventType is not ORDER_COMPLETED. topic {Topic}, partition {Partition}, offset {Offset}",
+                    "Kafka message ignored because eventType is not PAYMENT_SUCCEEDED. topic {Topic}, partition {Partition}, offset {Offset}",
                     result.Topic,
                     result.Partition.Value,
                     result.Offset.Value);
@@ -118,20 +118,21 @@ public sealed class OrderCompletedKafkaConsumer(
                 return;
             }
 
-            var orderEvent = OrderCompletedEventDeserializer.Deserialize(result.Message.Value);
+            var paymentEvent = PaymentSucceededEventDeserializer.Deserialize(result.Message.Value);
             using var scope = logger.BeginScope(new Dictionary<string, object?>
             {
                 ["service"] = "invoice-service",
-                ["correlationId"] = orderEvent.CorrelationId,
+                ["correlationId"] = paymentEvent.CorrelationId,
                 ["operation"] = operation,
-                ["eventType"] = orderEvent.EventType,
-                ["orderId"] = orderEvent.OrderId
+                ["eventType"] = paymentEvent.EventType,
+                ["eventId"] = paymentEvent.EventId,
+                ["orderId"] = paymentEvent.OrderId
             });
 
             logger.LogInformation(
                 "Kafka message deserialized for event {EventType} from {SourceService}",
-                orderEvent.EventType,
-                orderEvent.Service);
+                paymentEvent.EventType,
+                paymentEvent.Service);
 
             var retryCount = int.TryParse(configuration["INVOICE_RETRY_COUNT"], out var configuredRetryCount)
                 ? configuredRetryCount
@@ -139,7 +140,7 @@ public sealed class OrderCompletedKafkaConsumer(
 
             using var serviceScope = scopeFactory.CreateScope();
             var useCase = serviceScope.ServiceProvider.GetRequiredService<CreateInvoiceUseCase>();
-            var invoiceResult = await useCase.ExecuteAsync(orderEvent.ToCommand(retryCount), cancellationToken);
+            var invoiceResult = await useCase.ExecuteAsync(paymentEvent.ToCommand(retryCount), cancellationToken);
 
             if (!invoiceResult.Success)
             {
@@ -164,25 +165,25 @@ public sealed class OrderCompletedKafkaConsumer(
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException)
         {
-            await RecordRejectedOrderCompletedAsync(result.Message.Value, exception, cancellationToken);
+            await RecordRejectedPaymentSucceededAsync(result.Message.Value, exception, cancellationToken);
 
             logger.LogWarning(
                 exception,
                 "Kafka message rejected with status {Status}, errorCode {ErrorCode}, exceptionType {ExceptionType}, durationMs {DurationMs}",
                 "VALIDATION_FAILED",
-                "INVALID_ORDER_COMPLETED_EVENT",
+                "INVALID_PAYMENT_SUCCEEDED_EVENT",
                 exception.GetType().Name,
                 stopwatch.ElapsedMilliseconds);
             consumer.Commit(result);
         }
     }
 
-    private async Task RecordRejectedOrderCompletedAsync(
+    private async Task RecordRejectedPaymentSucceededAsync(
         string message,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (!TryReadRejectedOrderCompleted(message, out var rejectedEvent))
+        if (!TryReadRejectedPaymentSucceeded(message, out var rejectedEvent))
         {
             return;
         }
@@ -197,14 +198,14 @@ public sealed class OrderCompletedKafkaConsumer(
             {
                 rejectedEvent.OrderId,
                 reason = exception.Message,
-                errorCode = "INVALID_ORDER_COMPLETED_EVENT",
-                sourceEventType = "ORDER_COMPLETED",
+                errorCode = "INVALID_PAYMENT_SUCCEEDED_EVENT",
+                sourceEventType = "PAYMENT_SUCCEEDED",
                 sourceService = rejectedEvent.Service
             },
             cancellationToken);
     }
 
-    private static bool TryReadRejectedOrderCompleted(string message, out RejectedOrderCompletedEvent rejectedEvent)
+    private static bool TryReadRejectedPaymentSucceeded(string message, out RejectedPaymentSucceededEvent rejectedEvent)
     {
         rejectedEvent = default;
 
@@ -212,7 +213,7 @@ public sealed class OrderCompletedKafkaConsumer(
         {
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
-            if (!string.Equals(ReadString(root, "eventType"), "ORDER_COMPLETED", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(ReadString(root, "eventType"), "PAYMENT_SUCCEEDED", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -227,10 +228,10 @@ public sealed class OrderCompletedKafkaConsumer(
                 return false;
             }
 
-            rejectedEvent = new RejectedOrderCompletedEvent(
+            rejectedEvent = new RejectedPaymentSucceededEvent(
                 correlationId.Value,
                 ReadGuid(payload, "orderId"),
-                ReadString(root, "service") ?? ReadString(root, "source") ?? "shop-service");
+                ReadString(root, "service") ?? ReadString(root, "source") ?? "billing-service");
             return true;
         }
         catch (JsonException)
@@ -255,7 +256,7 @@ public sealed class OrderCompletedKafkaConsumer(
             : null;
     }
 
-    private readonly record struct RejectedOrderCompletedEvent(
+    private readonly record struct RejectedPaymentSucceededEvent(
         Guid CorrelationId,
         Guid? OrderId,
         string Service);

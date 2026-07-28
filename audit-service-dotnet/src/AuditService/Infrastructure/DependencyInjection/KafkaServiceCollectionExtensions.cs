@@ -21,7 +21,7 @@ public static class KafkaServiceCollectionExtensions
     {
         if (string.IsNullOrWhiteSpace(configuredTopics))
         {
-            return ["orders", "billing", "warehouse", "invoices"];
+            return ["orders", "billing", "warehouse", "invoices", "security-alerts", "system-alerts"];
         }
 
         var topics = configuredTopics
@@ -31,7 +31,7 @@ public static class KafkaServiceCollectionExtensions
             .ToArray();
 
         return topics.Length == 0
-            ? ["orders", "billing", "warehouse", "invoices"]
+            ? ["orders", "billing", "warehouse", "invoices", "security-alerts", "system-alerts"]
             : topics;
     }
 }

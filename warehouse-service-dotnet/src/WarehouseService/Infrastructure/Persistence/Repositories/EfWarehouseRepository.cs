@@ -141,7 +141,26 @@ public sealed class EfWarehouseRepository(
 
     public ReservationResult TryReserve(ReserveStockCommand command)
     {
-        using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
+        using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.ReadCommitted);
+
+        AcquireTransactionLock($"order:{command.OrderId}");
+        foreach (var productId in command.Items.Select(item => item.ProductId).Distinct().Order())
+        {
+            AcquireTransactionLock($"product:{productId}");
+        }
+
+        var existingEntity = dbContext.Reservations
+            .Include(reservation => reservation.Items)
+            .SingleOrDefault(reservation => reservation.OrderId == command.OrderId);
+        if (existingEntity is not null)
+        {
+            var existing = ToDomain(existingEntity);
+            var identical = SameItems(existing.Items, command.Items);
+            transaction.Rollback();
+            return identical
+                ? new ReservationResult(true, "Existing reservation returned.", existing.ToDto(), IsReplay: true)
+                : new ReservationResult(false, "orderId is already used by a different reservation request.", existing.ToDto(), IsConflict: true);
+        }
 
         foreach (var item in command.Items)
         {
@@ -168,8 +187,35 @@ public sealed class EfWarehouseRepository(
         var reservation = Reservation.Create(command.OrderId, command.CorrelationId, command.Items);
         dbContext.Reservations.Add(ToEntity(reservation));
 
-        dbContext.SaveChanges();
-        transaction.Commit();
+        try
+        {
+            dbContext.SaveChanges();
+            transaction.Commit();
+        }
+        catch (DbUpdateException)
+        {
+            transaction.Rollback();
+            dbContext.ChangeTracker.Clear();
+
+            var concurrentEntity = dbContext.Reservations
+                .AsNoTracking()
+                .Include(value => value.Items)
+                .SingleOrDefault(value => value.OrderId == command.OrderId);
+            if (concurrentEntity is null)
+            {
+                throw;
+            }
+
+            var concurrentReservation = ToDomain(concurrentEntity);
+            var identical = SameItems(concurrentReservation.Items, command.Items);
+            logger.LogInformation(
+                "Concurrent reservation retry detected for order {OrderId}; identicalRequest {IdenticalRequest}",
+                command.OrderId,
+                identical);
+            return identical
+                ? new ReservationResult(true, "Existing reservation returned.", concurrentReservation.ToDto(), IsReplay: true)
+                : new ReservationResult(false, "orderId is already used by a different reservation request.", concurrentReservation.ToDto(), IsConflict: true);
+        }
 
         logger.LogInformation(
             "Reserved stock for order {OrderId} with reservation {ReservationId} and correlation {CorrelationId}",
@@ -180,29 +226,42 @@ public sealed class EfWarehouseRepository(
         return new ReservationResult(true, "Reservation created.", reservation.ToDto());
     }
 
-    public Reservation? Cancel(Guid reservationId)
+    public ReservationTransitionResult Cancel(Guid reservationId)
     {
         return ChangeReservationStatus(reservationId, ReservationStatus.Cancelled, returnStock: true);
     }
 
-    public Reservation? Commit(Guid reservationId)
+    public ReservationTransitionResult Commit(Guid reservationId)
     {
         return ChangeReservationStatus(reservationId, ReservationStatus.Committed, returnStock: false);
     }
 
-    private Reservation? ChangeReservationStatus(Guid reservationId, ReservationStatus nextStatus, bool returnStock)
+    private ReservationTransitionResult ChangeReservationStatus(Guid reservationId, ReservationStatus nextStatus, bool returnStock)
     {
-        using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
+        using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.ReadCommitted);
+        AcquireTransactionLock($"reservation:{reservationId}");
 
         var entity = dbContext.Reservations
             .Include(reservation => reservation.Items)
             .SingleOrDefault(reservation => reservation.ReservationId == reservationId);
 
-        var reservation = entity is null ? null : ToDomain(entity);
-        if (entity is null || reservation is null || reservation.Status != ReservationStatus.Reserved)
+        if (entity is null)
         {
             transaction.Rollback();
-            return null;
+            return new(ReservationTransitionOutcome.NotFound, "Reservation does not exist.", null);
+        }
+
+        var reservation = ToDomain(entity);
+        if (reservation.Status == nextStatus)
+        {
+            transaction.Rollback();
+            return new(ReservationTransitionOutcome.AlreadyApplied, $"Reservation was already {nextStatus}.", reservation.ToDto());
+        }
+
+        if (reservation.Status != ReservationStatus.Reserved)
+        {
+            transaction.Rollback();
+            return new(ReservationTransitionOutcome.Conflict, $"Reservation in state {reservation.Status} cannot transition to {nextStatus}.", reservation.ToDto());
         }
 
         if (returnStock)
@@ -232,8 +291,18 @@ public sealed class EfWarehouseRepository(
             changed.ReservationId,
             changed.Status);
 
-        return changed;
+        return new(ReservationTransitionOutcome.Applied, $"Reservation changed to {nextStatus}.", changed.ToDto());
     }
+
+    private void AcquireTransactionLock(string key)
+    {
+        dbContext.Database.ExecuteSqlInterpolated(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))");
+    }
+
+    private static bool SameItems(IReadOnlyList<ReservationItem> left, IReadOnlyList<ReservationItem> right) =>
+        left.OrderBy(item => item.ProductId).ThenBy(item => item.Sku)
+            .SequenceEqual(right.OrderBy(item => item.ProductId).ThenBy(item => item.Sku));
 
     private static WarehouseReservationEntity ToEntity(Reservation reservation)
     {

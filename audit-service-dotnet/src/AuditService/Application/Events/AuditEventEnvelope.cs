@@ -20,6 +20,7 @@ public sealed record AuditEventEnvelope(
             Payload,
             PreviousEventId,
             Actor,
-            StatusCode);
+            StatusCode,
+            EventId);
     }
 }

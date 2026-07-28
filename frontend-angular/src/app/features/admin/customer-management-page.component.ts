@@ -1,13 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { ShopApiService } from '../../core/api/shop-api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
-  selector: 'app-customer-management-page',
-  standalone: true,
-  imports: [AsyncPipe, PageHeaderComponent],
-  template: `
+    selector: 'app-customer-management-page',
+    imports: [AsyncPipe, PageHeaderComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
     <app-page-header
       eyebrow="Admin"
       title="Customer Management"

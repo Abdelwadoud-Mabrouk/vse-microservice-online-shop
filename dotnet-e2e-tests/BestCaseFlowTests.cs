@@ -54,6 +54,20 @@ public sealed class BestCaseFlowTests
             customerEmail,
             cancellationToken);
         await client.WaitForAuditEventAsync(correlationId, "PAYMENT_SUCCEEDED", cancellationToken);
+        var invoiceId = await client.WaitForInvoiceAsync(customerEmail, cancellationToken);
+        await client.AssertInvoicePdfExistsAsync(invoiceId, cancellationToken);
+        await client.WaitForAuditEventAsync(correlationId, "INVOICE_CREATED", cancellationToken);
+
+        await kafka.PublishPaymentSucceededAsync(
+            settings.BillingTopic,
+            correlationId,
+            orderId,
+            product,
+            transactionId,
+            customerEmail,
+            cancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        Assert.Equal(1, await client.CountInvoicesAsync(customerEmail, cancellationToken));
 
         await client.CommitReservationAsync(correlationId, reservationId, cancellationToken);
         await client.WaitForAuditEventAsync(correlationId, "WAREHOUSE_COMMITTED", cancellationToken);
@@ -67,8 +81,5 @@ public sealed class BestCaseFlowTests
             customerEmail,
             cancellationToken);
         await client.WaitForAuditEventAsync(correlationId, "ORDER_COMPLETED", cancellationToken);
-        var invoiceId = await client.WaitForInvoiceAsync(customerEmail, cancellationToken);
-        await client.AssertInvoicePdfExistsAsync(invoiceId, cancellationToken);
-        await client.WaitForAuditEventAsync(correlationId, "INVOICE_CREATED", cancellationToken);
     }
 }

@@ -25,11 +25,13 @@ public static class InvoiceInfrastructureServiceCollectionExtensions
             return new KafkaConsumerOptions
             {
                 BootstrapServers = configuration["KAFKA_BOOTSTRAP_SERVERS"],
-                OrdersTopic = configuration["KAFKA_ORDERS_TOPIC"] ?? "orders",
+                PaymentSucceededTopic = configuration["KAFKA_PAYMENT_SUCCEEDED_TOPIC"]
+                    ?? configuration["KAFKA_BILLING_TOPIC"]
+                    ?? "billing",
                 ConsumerGroupId = configuration["KAFKA_INVOICE_CONSUMER_GROUP"] ?? "invoice-service"
             };
         });
-        services.AddHostedService<OrderCompletedKafkaConsumer>();
+        services.AddHostedService<PaymentSucceededKafkaConsumer>();
 
         return services;
     }

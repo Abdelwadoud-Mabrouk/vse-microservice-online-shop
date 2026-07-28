@@ -10,11 +10,13 @@ Es ersetzt nicht die Unit Tests der einzelnen Services. Es ergänzt sie.
 - Warehouse-Service ist erreichbar
 - Invoice-Service ist erreichbar
 - Warehouse reserviert Bestand per REST
-- Invoice verarbeitet `ORDER_COMPLETED` über Kafka
+- Invoice verarbeitet `PAYMENT_SUCCEEDED` über Kafka
 - Invoice erzeugt eine Rechnung und ein PDF
 - Audit speichert Events aus Kafka
 - Worst Case: zu wenig Bestand
-- Worst Case: ungültiges `ORDER_COMPLETED`-Event
+- Invoice-Duplikate erzeugen nur eine Rechnung
+- parallele identische Warehouse-Reservierungen reduzieren Bestand nur einmal
+- Worst Case: ungültiges `PAYMENT_SUCCEEDED`-Event
 
 ## Start
 
