@@ -13,7 +13,7 @@ export class ProductServiceService {
   private apiUrl = 'http://localhost:8087/api/v1/products';
 
   getApiUrl(){
-    return 'http://localhost:8080/'
+    return 'http://localhost:8087/'
   }
 
   // ================================

@@ -1,6 +1,5 @@
-import {Component, inject, OnDestroy, OnInit, signal} from '@angular/core';
+import {Component, inject, OnInit, signal} from '@angular/core';
 import {ActivatedRoute, RouterLink} from '@angular/router';
-import {CurrencyPipe} from '@angular/common';
 import {ShopApiService} from '../../../../core/api/shop-api.service';
 
 
@@ -8,8 +7,7 @@ import {ShopApiService} from '../../../../core/api/shop-api.service';
     selector: 'app-checkout-success-component',
     standalone: true,
     imports: [
-        RouterLink,
-        CurrencyPipe
+        RouterLink
     ],
     templateUrl: './checkout-success.component.html',
     styleUrl: './checkout-success.component.scss'

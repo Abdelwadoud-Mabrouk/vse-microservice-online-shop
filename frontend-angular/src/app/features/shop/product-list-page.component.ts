@@ -1,3 +1,4 @@
+/*
 import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AsyncPipe, CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -163,3 +164,4 @@ export class ProductListPageComponent {
     return furnitureImageStyle(product);
   }
 }
+*/

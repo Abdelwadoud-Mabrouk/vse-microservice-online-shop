@@ -84,6 +84,8 @@ export class ProductListComponentComponent implements OnInit {
 
                 next: response => {
 
+                    console.log(response)
+
                     this.products = response.content;
 
                     this.totalPages = response.totalPages;
@@ -187,7 +189,7 @@ export class ProductListComponentComponent implements OnInit {
 
     image(product: Product): string {
         return product.imageUrls?.[0]
-            ?  this.productService.getApiUrl()+ product.imageUrls[0]
+            ? this.productService.getApiUrl() + product.imageUrls[0]
             : 'assets/images/product-placeholder.jpg';
     }
 }
