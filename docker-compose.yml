@@ -59,26 +59,6 @@ services:
       timeout: 5s
       retries: 10
 
-    # =========================
-    # PostgreSQL - Payment Service
-    # =========================
-  product-db:
-      image: postgres:16-alpine
-      container_name: product-db
-      environment:
-        POSTGRES_DB: product_db
-        POSTGRES_USER: product_user
-        POSTGRES_PASSWORD: product_password
-      ports:
-        - "5436:5432"
-      volumes:
-        - product-db-data:/var/lib/postgresql/data
-      healthcheck:
-        test: [ "CMD-SHELL", "pg_isready -U product_user -d product_db" ]
-        interval: 5s
-        timeout: 5s
-        retries: 10
-
   # =========================
   # PostgreSQL - Warehouse Service
   # =========================
@@ -288,30 +268,10 @@ services:
 
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
-      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
 
     depends_on:
       billing-db:
-        condition: service_healthy
-
-  # =========================
-  # PRODUCT SERVICE (Spring)
-  # =========================
-  product-service:
-    build:
-      context: ./product-service-java
-    container_name: product-service
-    ports:
-      - "8086:8085"
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-
-      PRODUCT_DB_URL: ${PRODUCT_DB_URL}
-      PRODUCT_DB_USERNAME: ${PRODUCT_DB_USERNAME}
-      PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD}
-
-    depends_on:
-      product-db:
         condition: service_healthy
 
   # =========================
@@ -320,6 +280,7 @@ services:
   stripe-cli:
       image: stripe/stripe-cli
       container_name: stripe-cli
+      profiles: ["stripe-webhook"]
       command:
         - listen
         - --api-key
@@ -393,7 +354,6 @@ volumes:
   loki-data:
   grafana-data:
   billing-db-data:
-  product-db-data:
   audit-logs:
   warehouse-logs:
   invoice-logs:
