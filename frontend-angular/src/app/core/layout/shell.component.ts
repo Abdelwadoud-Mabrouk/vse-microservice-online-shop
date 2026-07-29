@@ -20,7 +20,6 @@ import { CartService } from '../../features/shop/cart.service';
 
         <nav>
           <a routerLink="/shop/products" routerLinkActive="active">Shop</a>
-          <a routerLink="/account" routerLinkActive="active">Customer</a>
           @if (role() === 'ADMIN') {
             <a routerLink="/admin" routerLinkActive="active">Admin</a>
             <a routerLink="/admin/audit" routerLinkActive="active">Timeline</a>

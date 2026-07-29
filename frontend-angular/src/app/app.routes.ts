@@ -16,11 +16,6 @@ export const routes: Routes = [
       .then(module => module.LoginPageComponent)
   },
   {
-    path: 'auth/register',
-    loadComponent: () => import('./features/auth/register-page.component')
-      .then(module => module.RegisterPageComponent)
-  },
-  {
     path: '',
     component: ShellComponent,
     children: [
@@ -53,27 +48,6 @@ export const routes: Routes = [
         ]
       },
       {
-        path: 'account',
-        canActivate: [authGuard],
-        children: [
-          {
-            path: '',
-            loadComponent: () => import('./features/customer/customer-profile-page.component')
-              .then(module => module.CustomerProfilePageComponent)
-          },
-          {
-            path: 'orders',
-            loadComponent: () => import('./features/customer/customer-orders-page.component')
-              .then(module => module.CustomerOrdersPageComponent)
-          },
-          {
-            path: 'addresses',
-            loadComponent: () => import('./features/customer/customer-addresses-page.component')
-              .then(module => module.CustomerAddressesPageComponent)
-          }
-        ]
-      },
-      {
         path: 'admin',
         canActivate: [roleGuard],
         data: { roles: ['ADMIN'] },
@@ -93,11 +67,6 @@ export const routes: Routes = [
             path: 'products/:id/edit',
             loadComponent: () => import('./features/admin/product-edit-page.component')
               .then(module => module.ProductEditPageComponent)
-          },
-          {
-            path: 'customers',
-            loadComponent: () => import('./features/admin/customer-management-page.component')
-              .then(module => module.CustomerManagementPageComponent)
           },
           {
             path: 'orders',

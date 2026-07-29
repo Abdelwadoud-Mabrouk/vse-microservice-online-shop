@@ -1,4 +1,5 @@
 using System.Text.Json;
+using InvoiceService.Application;
 using InvoiceService.Application.Events;
 using InvoiceService.Domain;
 
@@ -29,8 +30,6 @@ public static class PaymentSucceededEventDeserializer
         var correlationId = ReadGuid(root, "correlationId", required: false)
             ?? ReadGuid(payload, "correlationId", required: false)
             ?? Guid.Empty;
-        var customer = ReadCustomer(payload);
-        var items = ReadItems(payload);
 
         var eventType = ReadString(root, "eventType") ?? "PAYMENT_SUCCEEDED";
         if (!string.Equals(eventType, "PAYMENT_SUCCEEDED", StringComparison.OrdinalIgnoreCase))
@@ -45,51 +44,46 @@ public static class PaymentSucceededEventDeserializer
             ReadString(root, "service") ?? ReadString(root, "source") ?? "billing-service",
             ReadDateTime(root, "timestamp") ?? ReadDateTime(root, "occurredAt") ?? DateTimeOffset.UtcNow,
             ReadGuid(payload, "orderId") ?? Guid.Empty,
-            ReadString(payload, "transactionId") ?? ReadString(payload, "paymentId") ?? string.Empty,
+            ReadString(payload, "providerTransactionId")
+                ?? ReadString(payload, "transactionId")
+                ?? ReadString(payload, "paymentId")
+                ?? string.Empty,
             ReadDecimal(payload, "amount", "totalAmount"),
             ReadString(payload, "currency") ?? string.Empty,
-            ReadString(payload, "customerEmail") ?? customer.Email,
-            customer,
-            items,
+            TryReadOrderDetails(payload),
             ReadGuid(root, "previousEventId", required: false),
             ReadString(root, "actor") ?? ReadString(root, "service") ?? ReadString(root, "source") ?? "billing-service",
             ReadString(root, "statusCode") ?? "SUCCESS");
     }
 
-    private static CustomerDetails ReadCustomer(JsonElement payload)
+    private static OrderInvoiceDetails? TryReadOrderDetails(JsonElement payload)
     {
-        if (!payload.TryGetProperty("customer", out var customer))
+        if (!payload.TryGetProperty("customer", out var customer)
+            || !payload.TryGetProperty("items", out var items)
+            || items.ValueKind != JsonValueKind.Array)
         {
-            throw new JsonException("PAYMENT_SUCCEEDED event is missing customer details.");
+            return null;
         }
 
         var email = ReadString(customer, "email")
             ?? ReadString(payload, "customerEmail")
             ?? string.Empty;
-
-        return CustomerDetails.Create(
+        var customerDetails = CustomerDetails.Create(
             ReadString(customer, "name") ?? string.Empty,
             email,
             ReadString(customer, "street") ?? string.Empty,
             ReadString(customer, "postalCode") ?? string.Empty,
             ReadString(customer, "city") ?? string.Empty,
             ReadString(customer, "country") ?? string.Empty);
-    }
-
-    private static IReadOnlyList<InvoiceLineItem> ReadItems(JsonElement payload)
-    {
-        if (!payload.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
-        {
-            throw new JsonException("PAYMENT_SUCCEEDED event is missing invoice items.");
-        }
-
-        return items.EnumerateArray()
+        var invoiceItems = items.EnumerateArray()
             .Select(item => InvoiceLineItem.Create(
                 ReadString(item, "sku") ?? string.Empty,
                 ReadString(item, "name") ?? string.Empty,
                 ReadInt(item, "quantity"),
                 ReadDecimal(item, "unitPrice")))
             .ToArray();
+
+        return new OrderInvoiceDetails(email, customerDetails, invoiceItems);
     }
 
     private static Guid? ReadGuid(JsonElement element, string name, bool required = true)

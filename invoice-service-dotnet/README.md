@@ -27,7 +27,10 @@ Die vollständige OpenAPI-Beschreibung ist im laufenden Docker-Stack unter
 
 ## Kafka-Events
 
-Der Service konsumiert `PAYMENT_SUCCEEDED` aus dem Topic `billing`. Er meldet
+Der Service konsumiert `PAYMENT_SUCCEEDED` aus dem Topic `billing`. Billing
+liefert die Zahlungsdaten. Der Invoice-Service lädt die Kunden- und
+Positionsdaten anschließend über die `orderId` aus dem Shop-Service. Andere
+Billing-Ereignisse wie `REFUND_SUCCEEDED` werden ignoriert. Der Service meldet
 das Ergebnis als:
 
 - `INVOICE_CREATED`

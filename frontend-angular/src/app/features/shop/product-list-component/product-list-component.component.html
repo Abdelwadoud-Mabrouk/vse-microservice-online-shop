@@ -62,7 +62,7 @@
 </section>
 
 
-@if (loading) {
+@if (loading()) {
 
 
     <div class="loading">
@@ -78,7 +78,7 @@
     <section class="product-grid">
 
 
-        @for (product of products; track product.id) {
+        @for (product of products(); track product.id) {
 
 
             <article class="product-card">
@@ -195,7 +195,7 @@
         <button
                 class="ghost-button"
                 (click)="previousPage()"
-                [disabled]="page===0"
+                [disabled]="page() === 0"
         >
             Previous
         </button>
@@ -203,7 +203,7 @@
 
 
         <span>
- Seite {{page + 1}} / {{totalPages}}
+ Seite {{page() + 1}} / {{totalPages()}}
 </span>
 
 
@@ -211,7 +211,7 @@
         <button
                 class="ghost-button"
                 (click)="nextPage()"
-                [disabled]="!hasNext"
+                [disabled]="!hasNext()"
         >
             Next
         </button>

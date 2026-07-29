@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {HttpClient, HttpParams} from '@angular/common/http';
-import {catchError, Observable, of, tap} from "rxjs";
+import {Observable, tap} from "rxjs";
 import {Product} from "../models/product.model";
 
 @Injectable({
@@ -10,10 +10,22 @@ export class ProductServiceService {
 
   private http = inject(HttpClient);
 
-  private apiUrl = 'http://localhost:8087/api/v1/products';
+  private readonly apiUrl = '/api/shop/api/v1/products';
 
   getApiUrl(){
-    return 'http://localhost:8080/'
+    return '/api/shop';
+  }
+
+  resolveImageUrl(imageUrl?: string): string {
+    if (!imageUrl) {
+      return 'assets/images/product-placeholder.jpg';
+    }
+
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+
+    return `${this.getApiUrl()}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
   }
 
   // ================================

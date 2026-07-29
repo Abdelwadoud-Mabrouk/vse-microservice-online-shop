@@ -19,7 +19,7 @@ public sealed class CreateInvoiceUseCase(
             ["service"] = "invoice-service",
             ["correlationId"] = payment.CorrelationId,
             ["operation"] = "invoice.create",
-            ["eventType"] = "PaymentSucceeded",
+            ["eventType"] = "PAYMENT_SUCCEEDED",
             ["orderId"] = payment.OrderId
         });
 

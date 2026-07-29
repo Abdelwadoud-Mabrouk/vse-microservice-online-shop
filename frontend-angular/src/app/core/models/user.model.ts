@@ -1,4 +1,4 @@
-export type UserRole = 'CUSTOMER' | 'ADMIN' | 'WAREHOUSE';
+export type UserRole = 'ADMIN' | 'WAREHOUSE';
 
 export interface UserSession {
   id: string;
@@ -8,12 +8,6 @@ export interface UserSession {
 }
 
 export const demoUsers: UserSession[] = [
-  {
-    id: 'demo-customer',
-    displayName: 'Customer Demo',
-    email: 'customer@example.com',
-    role: 'CUSTOMER'
-  },
   {
     id: 'demo-admin',
     displayName: 'Admin Demo',

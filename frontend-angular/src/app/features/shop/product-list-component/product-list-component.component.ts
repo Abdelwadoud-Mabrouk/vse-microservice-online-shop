@@ -19,9 +19,9 @@ export class ProductListComponentComponent implements OnInit {
     readonly cart = inject(CartService);
 
 
-    products: Product[] = [];
+    products = signal<Product[]>([]);
 
-    loading = false;
+    loading = signal(false);
 
 
     selectedCategory = signal<string>('all');
@@ -61,22 +61,22 @@ export class ProductListComponentComponent implements OnInit {
 
     }
 
-    page = 0;
+    page = signal(0);
 
     size = 12;
 
-    totalPages = 0;
+    totalPages = signal(0);
 
-    hasNext = false;
+    hasNext = signal(false);
 
     loadAllProducts(): void {
 
-        this.loading = true;
+        this.loading.set(true);
 
 
         this.productService
             .getAllProducts(
-                this.page,
+                this.page(),
                 this.size,
                 'name'
             )
@@ -84,14 +84,14 @@ export class ProductListComponentComponent implements OnInit {
 
                 next: response => {
 
-                    this.products = response.content;
+                    this.products.set(response.content);
 
-                    this.totalPages = response.totalPages;
+                    this.totalPages.set(response.totalPages);
 
-                    this.hasNext = !response.last;
+                    this.hasNext.set(!response.last);
 
 
-                    this.loading = false;
+                    this.loading.set(false);
 
                 },
 
@@ -100,7 +100,7 @@ export class ProductListComponentComponent implements OnInit {
 
                     console.error(error);
 
-                    this.loading = false;
+                    this.loading.set(false);
 
                 }
 
@@ -111,12 +111,12 @@ export class ProductListComponentComponent implements OnInit {
 
     nextPage() {
 
-        if (!this.hasNext) {
+        if (!this.hasNext()) {
             return;
         }
 
 
-        this.page++;
+        this.page.update(page => page + 1);
 
         this.loadAllProducts();
 
@@ -124,12 +124,12 @@ export class ProductListComponentComponent implements OnInit {
 
     previousPage() {
 
-        if (this.page === 0) {
+        if (this.page() === 0) {
             return;
         }
 
 
-        this.page--;
+        this.page.update(page => page - 1);
 
         this.loadAllProducts();
 
@@ -149,7 +149,7 @@ export class ProductListComponentComponent implements OnInit {
         }
 
 
-        this.loading = true;
+        this.loading.set(true);
 
 
         this.productService
@@ -158,9 +158,9 @@ export class ProductListComponentComponent implements OnInit {
 
                 next: response => {
 
-                    this.products = response.content;
+                    this.products.set(response.content);
 
-                    this.loading = false;
+                    this.loading.set(false);
 
                 },
 
@@ -169,7 +169,7 @@ export class ProductListComponentComponent implements OnInit {
 
                     console.error(error);
 
-                    this.loading = false;
+                    this.loading.set(false);
 
                 }
 
@@ -186,9 +186,7 @@ export class ProductListComponentComponent implements OnInit {
 
 
     image(product: Product): string {
-        return product.imageUrls?.[0]
-            ?  this.productService.getApiUrl()+ product.imageUrls[0]
-            : 'assets/images/product-placeholder.jpg';
+        return this.productService.resolveImageUrl(product.imageUrls?.[0]);
     }
 }
 

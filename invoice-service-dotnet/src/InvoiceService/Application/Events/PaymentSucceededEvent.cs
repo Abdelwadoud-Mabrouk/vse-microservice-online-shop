@@ -1,4 +1,5 @@
 using InvoiceService.Domain;
+using InvoiceService.Application;
 
 namespace InvoiceService.Application.Events;
 
@@ -12,14 +13,12 @@ public sealed record PaymentSucceededEvent(
     string TransactionId,
     decimal Amount,
     string Currency,
-    string CustomerEmail,
-    CustomerDetails Customer,
-    IReadOnlyList<InvoiceLineItem> Items,
+    OrderInvoiceDetails? EmbeddedOrderDetails,
     Guid? PreviousEventId,
     string Actor,
     string StatusCode)
 {
-    public CreateInvoiceCommand ToCommand(int retryCount)
+    public CreateInvoiceCommand ToCommand(OrderInvoiceDetails order, int retryCount)
     {
         var payment = PaymentSucceeded.Create(
             CorrelationId,
@@ -27,9 +26,9 @@ public sealed record PaymentSucceededEvent(
             TransactionId,
             Amount,
             Currency,
-            CustomerEmail,
-            Customer,
-            Items);
+            order.CustomerEmail,
+            order.Customer,
+            order.Items);
 
         return new CreateInvoiceCommand(payment, retryCount);
     }
