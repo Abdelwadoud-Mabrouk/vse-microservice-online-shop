@@ -1,3 +1,4 @@
+/*
 package com.vseonlineshop.shopservice.config;
 
 import org.springframework.context.annotation.Bean;
@@ -11,4 +12,4 @@ public class JacksonConfig {
     public ObjectMapper objectMapper() {
         return new ObjectMapper();
     }
-}
+}*/

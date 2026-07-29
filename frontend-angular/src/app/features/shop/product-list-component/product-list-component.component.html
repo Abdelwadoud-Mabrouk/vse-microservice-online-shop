@@ -1,8 +1,5 @@
 <section class="shop-hero">
-
-
     <div class="shop-hero-copy">
-
         <span class="eyebrow">
             Furniture collection 2026
         </span>
@@ -15,200 +12,115 @@
     </div>
 </section>
 
-
 <section class="shop-section-head">
     <div>
         <span class="eyebrow">
             Catalog
         </span>
-
-
         <h2>
             Furniture for every room
         </h2>
-
     </div>
-
 
     <div class="category-tabs">
-
-
         @for (category of categories; track category.slug) {
-
-
             <button
-
                     type="button"
-
                     class="ghost-button"
-
                     [class.active]="selectedCategory() === category.slug"
-
                     (click)="loadCategory(category.slug)"
-
             >
-
                 {{ category.label }}
-
             </button>
-
-
         }
-
-
     </div>
-
-
 </section>
 
-
-@if (loading) {
-
+<!-- 1. loading als Signal auslesen: loading() -->
+@if (loading()) {
 
     <div class="loading">
-
         Produkte werden geladen...
-
     </div>
-
 
 } @else {
 
-
     <section class="product-grid">
 
-
-        @for (product of products; track product.id) {
-
+        <!-- 2. products als Signal auslesen: products() -->
+        @for (product of products(); track product.id) {
 
             <article class="product-card">
 
-
                 <a
                         class="product-media"
-
-                        [routerLink]="['/shop/products',product.slug]"
+                        [routerLink]="['/shop/products', product.slug]"
                 >
-
-
                     <img
-
                             [src]="image(product)"
-
                             [alt]="product.name"
-
                             class="product-image"
-
                     />
-
-
                 </a>
-
 
                 <div class="product-card-body">
 
-
                     <div class="product-meta">
-
-    <span>
-        {{ product.categoryName }}
-    </span>
-
+                        <span>{{ product.categoryName }}</span>
                     </div>
 
-
-                    <h3>
-                        {{ product.name }}
-                    </h3>
-
-
-                    <p>
-                        {{ product.material }}
-                    </p>
-
-
-                    <p>
-                        {{ product.color }}
-                    </p>
+                    <h3>{{ product.name }}</h3>
+                    <p>{{ product.material }}</p>
+                    <p>{{ product.color }}</p>
 
                     <strong class="price">
-
                         {{ product.price | currency:'EUR' }}
-
                     </strong>
 
-
                     <div class="button-row">
-
-
                         <a
-
                                 class="ghost-button"
-
-                                [routerLink]="['/shop/products',product.slug]"
-
+                                [routerLink]="['/shop/products', product.slug]"
                         >
-
                             View
-
                         </a>
 
-
-                        <button
-
-                                (click)="addToCart(product)"
-
-                        >
-
+                        <button type="button" (click)="addToCart(product)">
                             Add
-
                         </button>
-
-
                     </div>
-
 
                 </div>
 
-
             </article>
-
 
         } @empty {
 
-
             <div class="empty-state">
-
                 Keine Produkte gefunden.
-
             </div>
 
-
         }
-
 
     </section>
 
     <section class="pagination">
 
-
         <button
+                type="button"
                 class="ghost-button"
                 (click)="previousPage()"
-                [disabled]="page===0"
+                [disabled]="page === 0"
         >
             Previous
         </button>
 
-
-
         <span>
- Seite {{page + 1}} / {{totalPages}}
-</span>
-
-
+            Seite {{ page + 1 }} / {{ totalPages }}
+        </span>
 
         <button
+                type="button"
                 class="ghost-button"
                 (click)="nextPage()"
                 [disabled]="!hasNext"
@@ -216,8 +128,6 @@
             Next
         </button>
 
-
     </section>
-
 
 }

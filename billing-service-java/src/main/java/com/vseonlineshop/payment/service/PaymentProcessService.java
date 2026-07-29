@@ -220,6 +220,43 @@ public class PaymentProcessService {
 
     }
 
+    /**
+     * Ruft den aktuellen Zahlungsstatus anhand der Correlation-ID ab.
+     *
+     * @param correlationId Die Eindeutige Trace-ID des Zahlungsvorgangs
+     * @return PaymentResponse DTO mit den aktuellen Zahlungsdetails
+     * @throws PaymentServiceException wenn keine Zahlung zur Correlation-ID existiert
+     */
+    public PaymentResponse getByCorrelationId(UUID correlationId) {
+        log.info(
+                "Abfrage des Zahlungsstatus per Correlation-ID",
+                kv("service", "billing-service"),
+                kv("context", Map.of("correlationId", correlationId))
+        );
+
+        return paymentRepo.findByCorrelationId(correlationId)
+                .map(this::mapToPaymentResponse)
+                .orElseThrow(() -> {
+                    log.warn(
+                            "Keine Zahlung zur Correlation-ID gefunden",
+                            kv("service", "billing-service"),
+                            kv("context", Map.of("correlationId", correlationId))
+                    );
+                    return new PaymentServiceException("Payment mit Correlation-ID " + correlationId + " wurde nicht gefunden.");
+                });
+    }
+
+
+    private PaymentResponse mapToPaymentResponse(Payment payment) {
+        return PaymentResponse.builder()
+                .correlationId(payment.getCorrelationId())
+                .orderId(payment.getOrderId())
+                .paymentId(payment.getPaymentId())
+                .status(payment.getStatus())
+                .paidAt(payment.getPaidAt())
+                .build();
+    }
+
     public String getStatus(String transactionId) {
 
 

@@ -57,6 +57,20 @@ public class PaymentService {
 
     }
 
+    public PaymentResponse getByCorrelationId(UUID correlationId) {
+        MDC.put(
+                "correlationId",
+                correlationId.toString()
+        );
+
+        try {
+            return paymentProcessService.getByCorrelationId(correlationId);
+
+        } finally {
+            MDC.clear();
+        }
+    }
+
     public String getStatus(String transactionId, UUID correlationId) {
         MDC.put(
                 "correlationId",

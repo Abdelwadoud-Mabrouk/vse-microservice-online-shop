@@ -1,0 +1,755 @@
+openapi: 3.0.3
+info:
+  title: Shop Service API
+  description: REST API für die Verwaltung von Bestellungen, Produkten und Zahlungsabwicklung
+  version: 1.0.0
+servers:
+  - url: http://localhost:8087
+    description: Lokaler Entwicklungsserver
+tags:
+  - name: Order Controller
+    description: Endpunkte für den Bestellprozess und Zahlungsabwicklung
+  - name: product-controller
+    description: Endpunkte für die Produktsuche und -filterung
+  - name: health-controller
+    description: Health-Check Endpunkt
+
+paths:
+  /api/v1/orders:
+    post:
+      tags:
+        - Order Controller
+      summary: Bestellung erstellen
+      description: Erstellt eine neue Bestellung, reserviert Bestand im Warehouse und initiiert die Zahlung.
+      operationId: checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderRequest"
+      responses:
+        "201":
+          description: Order erfolgreich angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+        "400":
+          description: Bad Request – Ungültige Syntax oder fehlende Felder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "409":
+          description: Conflict – Kein Bestand im Warehouse verfügbar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "422":
+          description: Unprocessable Entity – Fachliche Validierung fehlgeschlagen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "503":
+          description: Service Unavailable – Zahlungs- oder Lager-Service nicht erreichbar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/v1/orders/{id}:
+    get:
+      tags:
+        - Order Controller
+      summary: Order per ID abrufen
+      operationId: getOrder
+      parameters:
+        - name: id
+          in: path
+          description: UUID der Bestellung
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetailsResponse"
+        "404":
+          description: Order nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/v1/orders/capture/{token}:
+    post:
+      tags:
+        - Order Controller
+      summary: PayPal-Zahlung abschließen
+      description: Schließt eine PayPal-Transaktion über das Token ab.
+      operationId: capturePaypalOrder
+      parameters:
+        - name: token
+          in: path
+          description: PayPal Token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Zahlung erfolgreich erfasst
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          description: Ungültiger PayPal Token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/v1/products:
+    get:
+      tags:
+        - product-controller
+      summary: Alle Produkte abrufen (paginiert)
+      operationId: getAllProducts
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/{id}:
+    get:
+      tags:
+        - product-controller
+      summary: Produkt nach ID abrufen
+      operationId: getProductById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "404":
+          description: Produkt nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/v1/products/search:
+    get:
+      tags:
+        - product-controller
+      summary: Produkte suchen
+      operationId: searchProducts
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/price:
+    get:
+      tags:
+        - product-controller
+      summary: Produkte nach Preis filtern
+      operationId: getProductsByPrice
+      parameters:
+        - name: min
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: max
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/material/{material}:
+    get:
+      tags:
+        - product-controller
+      summary: Produkte nach Material filtern
+      operationId: getProductsByMaterial
+      parameters:
+        - name: material
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/color/{color}:
+    get:
+      tags:
+        - product-controller
+      summary: Produkte nach Farbe filtern
+      operationId: getProductsByColor
+      parameters:
+        - name: color
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/category/{slug}:
+    get:
+      tags:
+        - product-controller
+      summary: Produkte nach Kategorie filtern
+      operationId: getProductsByCategory
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 12
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageProductResponse"
+
+  /api/v1/products/details/{slug}:
+    get:
+      tags:
+        - product-controller
+      summary: Produkt nach Slug abrufen
+      operationId: getProductBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+
+  /health:
+    get:
+      tags:
+        - health-controller
+      summary: Health Check
+      operationId: health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+components:
+  schemas:
+    ApiErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-30T10:15:30Z"
+        status:
+          type: integer
+          example: 422
+        error:
+          type: string
+          example: "Unprocessable Entity"
+        message:
+          type: string
+          example: "Produkt nicht genügend auf Lager oder Validierungsfehler"
+        path:
+          type: string
+          example: "/api/v1/orders"
+
+    CustomerInformationRequest:
+      type: object
+      required:
+        - email
+        - firstName
+        - lastName
+      properties:
+        firstName:
+          type: string
+          example: "Max"
+        lastName:
+          type: string
+          example: "Mustermann"
+        email:
+          type: string
+          example: "max@example.com"
+        phone:
+          type: string
+          example: "+49123456789"
+
+    ItemRequest:
+      type: object
+      required:
+        - productId
+        - quantity
+        - sku
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        sku:
+          type: string
+
+    OrderRequest:
+      type: object
+      required:
+        - currency
+        - customer
+        - items
+        - paymentMethod
+        - shippingAddress
+      properties:
+        customer:
+          $ref: "#/components/schemas/CustomerInformationRequest"
+        shippingAddress:
+          $ref: "#/components/schemas/ShippingAddressRequest"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemRequest"
+        currency:
+          type: string
+          example: "EUR"
+        paymentMethod:
+          type: string
+          enum:
+            - CREDIT_CARD
+            - KLARNA
+            - APPLE_PAY
+            - GOOGLE_PAY
+            - PAYPAL
+
+    ShippingAddressRequest:
+      type: object
+      required:
+        - city
+        - country
+        - houseNumber
+        - postalCode
+        - street
+      properties:
+        street:
+          type: string
+          example: "Hauptstraße"
+        houseNumber:
+          type: string
+          example: "12A"
+        postalCode:
+          type: string
+          example: "10115"
+        city:
+          type: string
+          example: "Berlin"
+        country:
+          type: string
+          example: "Deutschland"
+
+    CheckoutResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - PENDING
+            - AWAITING_PAYMENT
+            - PROCESSING
+            - COMPLETED
+            - PAYMENT_FAILED
+            - OUT_OF_STOCK
+            - ROLLBACK_COMPLETED
+            - REFUND_PENDING
+            - CANCELLED
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        approvalUrl:
+          type: string
+
+    CustomerInformationResponse:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    ShippingAddressResponse:
+      type: object
+      properties:
+        street:
+          type: string
+        houseNumber:
+          type: string
+        postalCode:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+
+    OrderItemResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        pricePerUnit:
+          type: number
+        subTotal:
+          type: number
+        taxRate:
+          type: number
+        taxAmount:
+          type: number
+        totalPrice:
+          type: number
+
+    OrderDetailsResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        customer:
+          $ref: "#/components/schemas/CustomerInformationResponse"
+        shippingAddress:
+          $ref: "#/components/schemas/ShippingAddressResponse"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemResponse"
+        totalAmount:
+          type: number
+        paymentMethod:
+          type: string
+          enum:
+            - CREDIT_CARD
+            - KLARNA
+            - APPLE_PAY
+            - GOOGLE_PAY
+            - PAYPAL
+        status:
+          type: string
+          enum:
+            - PENDING
+            - AWAITING_PAYMENT
+            - PROCESSING
+            - COMPLETED
+            - PAYMENT_FAILED
+            - OUT_OF_STOCK
+            - ROLLBACK_COMPLETED
+            - REFUND_PENDING
+            - CANCELLED
+        createdAt:
+          type: string
+          format: date-time
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        categoryName:
+          type: string
+        categorySlug:
+          type: string
+        price:
+          type: number
+        originalPrice:
+          type: number
+        imageUrls:
+          type: array
+          items:
+            type: string
+        widthCm:
+          type: number
+          format: double
+        heightCm:
+          type: number
+          format: double
+        depthCm:
+          type: number
+          format: double
+        weightKg:
+          type: number
+          format: double
+        material:
+          type: string
+        color:
+          type: string
+        active:
+          type: boolean
+
+    PageProductResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/PageableObject"
+        empty:
+          type: boolean
+
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        unpaged:
+          type: boolean
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        unsorted:
+          type: boolean
+        sorted:
+          type: boolean

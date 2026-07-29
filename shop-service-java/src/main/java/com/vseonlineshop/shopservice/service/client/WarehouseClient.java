@@ -4,7 +4,7 @@ import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.dto.warehouse.*;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -26,10 +26,10 @@ public class WarehouseClient {
     private final RestClient restClient;
 
 
-    public WarehouseClient(@Value("${services.warehouse.url}") String baseUrl) {
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .build();
+    public WarehouseClient(
+            @Qualifier("warehouseRestClient") RestClient restClient
+    ) {
+        this.restClient = restClient;
     }
 
     @Retry(name = "warehouseReserve")

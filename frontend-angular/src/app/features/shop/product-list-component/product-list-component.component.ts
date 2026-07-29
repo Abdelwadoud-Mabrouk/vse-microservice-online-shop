@@ -15,187 +15,96 @@ import {Product} from "../../../core/models/product.model";
 export class ProductListComponentComponent implements OnInit {
 
     private productService = inject(ProductServiceService);
-
     readonly cart = inject(CartService);
 
-
-    products: Product[] = [];
-
-    loading = false;
-
-
+    // 💡 In Angular 22 als Signals definiert:
+    products = signal<Product[]>([]);
+    loading = signal<boolean>(false);
     selectedCategory = signal<string>('all');
 
-
-    categories = [
-        {
-            label: 'Alle',
-            slug: 'all'
-        },
-        {
-            label: 'Wohnzimmer',
-            slug: 'wohnzimmer'
-        },
-        {
-            label: 'Schlafzimmer',
-            slug: 'schlafzimmer'
-        },
-        {
-            label: 'Esszimmer',
-            slug: 'esszimmer'
-        },
-        {
-            label: 'Arbeitszimmer',
-            slug: 'arbeitszimmer'
-        },
-        {
-            label: 'Outdoor',
-            slug: 'outdoor'
-        }
-    ];
-
-
-    ngOnInit(): void {
-
-        this.loadAllProducts();
-
-    }
-
     page = 0;
-
     size = 12;
-
     totalPages = 0;
-
     hasNext = false;
 
-    loadAllProducts(): void {
+    categories = [
+        { label: 'Alle', slug: 'all' },
+        { label: 'Wohnzimmer', slug: 'wohnzimmer' },
+        { label: 'Schlafzimmer', slug: 'schlafzimmer' },
+        { label: 'Esszimmer', slug: 'esszimmer' },
+        { label: 'Arbeitszimmer', slug: 'arbeitszimmer' },
+        { label: 'Outdoor', slug: 'outdoor' }
+    ];
 
-        this.loading = true;
-
-
-        this.productService
-            .getAllProducts(
-                this.page,
-                this.size,
-                'name'
-            )
-            .subscribe({
-
-                next: response => {
-
-                    console.log(response)
-
-                    this.products = response.content;
-
-                    this.totalPages = response.totalPages;
-
-                    this.hasNext = !response.last;
-
-
-                    this.loading = false;
-
-                },
-
-
-                error: error => {
-
-                    console.error(error);
-
-                    this.loading = false;
-
-                }
-
-            });
-
+    ngOnInit(): void {
+        this.loadAllProducts();
     }
 
+    loadAllProducts(): void {
+        this.loading.set(true); // Signal Wert setzen
+
+        this.productService
+            .getAllProducts(this.page, this.size, 'name')
+            .subscribe({
+                next: response => {
+                    console.log(response);
+
+                    this.products.set(response.content || []);
+                    this.totalPages = response.totalPages;
+                    this.hasNext = !response.last;
+
+                    this.loading.set(false);
+                },
+                error: error => {
+                    console.error(error);
+                    this.loading.set(false);
+                }
+            });
+    }
 
     nextPage() {
-
-        if (!this.hasNext) {
-            return;
-        }
-
-
+        if (!this.hasNext) return;
         this.page++;
-
         this.loadAllProducts();
-
     }
 
     previousPage() {
-
-        if (this.page === 0) {
-            return;
-        }
-
-
+        if (this.page === 0) return;
         this.page--;
-
         this.loadAllProducts();
-
     }
 
     loadCategory(slug: string): void {
-
-
         this.selectedCategory.set(slug);
 
-
         if (slug === 'all') {
-
             this.loadAllProducts();
-
             return;
         }
 
-
-        this.loading = true;
-
+        this.loading.set(true);
 
         this.productService
             .getProductsByCategory(slug)
             .subscribe({
-
                 next: response => {
-
-                    this.products = response.content;
-
-                    this.loading = false;
-
+                    this.products.set(response.content || []);
+                    this.loading.set(false);
                 },
-
-
                 error: error => {
-
                     console.error(error);
-
-                    this.loading = false;
-
+                    this.loading.set(false);
                 }
-
             });
-
     }
-
 
     addToCart(product: Product): void {
-
         this.cart.add(product);
-
     }
-
 
     image(product: Product): string {
         return product.imageUrls?.[0]
             ? this.productService.getApiUrl() + product.imageUrls[0]
-            : 'assets/images/product-placeholder.jpg';
+            : 'assets/images/product_custom.jpg';
     }
 }
-
-// todo
-//  1: Saga Code (Theorie) mit Worse Case  a: Direct mit Shop
-//  2: Bericht / Sequence Diagram ==> Best Case
-//  2: Clean Code  a: Shop Service, b: Billing c: Angular d: Product
-//  4: filters design(Hero, Header. footer)

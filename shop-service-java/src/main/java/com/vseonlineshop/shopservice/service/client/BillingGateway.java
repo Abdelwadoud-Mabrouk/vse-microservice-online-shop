@@ -8,6 +8,7 @@ import com.vseonlineshop.shopservice.exception.PaymentServiceException;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatusCode;
@@ -24,11 +25,14 @@ import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class BillingGateway {
 
 
     private final RestClient restClient;
+
+    public BillingGateway( @Qualifier("paymentRestClient") RestClient restClient) {
+        this.restClient = restClient;
+    }
 
 
     @Retry(name = "payment")

@@ -2,6 +2,7 @@ package com.vseonlineshop.payment.strategy;
 
 import com.paypal.sdk.controllers.OrdersController;
 import com.paypal.sdk.controllers.PaymentsController;
+import com.paypal.sdk.exceptions.ApiException;
 import com.paypal.sdk.http.response.ApiResponse;
 import com.paypal.sdk.models.*;
 import com.vseonlineshop.payment.entity.PaymentTransaction;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -137,10 +139,20 @@ public class PaypalStrategy implements PaymentStrategy {
                     auditJson
             );
 
+        } catch (ApiException e) {
+            log.error("[PAYPAL/API_ERROR] PayPal API-Fehler für Order-ID={}. Status={}. Response Body={}",
+                    orderRequest.orderId(), e.getResponseCode(), e.getMessage(), e);
+            throw new PaymentServiceException("PayPal API-Fehler bei Order-Erstellung: " + e.getMessage(), e);
+
+        } catch (IOException e) {
+            log.error("[PAYPAL/TIMEOUT] Netzwerkfehler bei Verbindung zu PayPal für Order-ID={}",
+                    orderRequest.orderId(), e);
+            throw new PaymentServiceException("Netzwerkfehler bei Verbindung zu PayPal", e);
+
         } catch (Exception e) {
-            log.error("[PAYPAL/ERROR] Fehler für Order-ID={}. Grund: {}",
+            log.error("[PAYPAL/ERROR] Unerwarteter Fehler für Order-ID={}. Grund: {}",
                     orderRequest.orderId(), e.getMessage(), e);
-            throw new PaymentServiceException("Zahlung über PayPal fehlgeschlagen");
+            throw new PaymentServiceException("Zahlung über PayPal fehlgeschlagen: " + e.getMessage(), e);
         }
     }
 
@@ -183,10 +195,26 @@ public class PaypalStrategy implements PaymentStrategy {
 
             return refund.getId();
 
+        } catch (ApiException e) {
+            if (e.getResponseCode() == 422 || e.getResponseCode() == 400) {
+                log.warn("[PAYPAL/REFUND_DECLINED] Refund abgelehnt für Transaktion={}. Code={}. Body={}",
+                        transactionId, e.getResponseCode(), e.getMessage());
+                throw new PaymentServiceException("Rückerstattung über PayPal nicht möglich: " + e.getMessage(), e);
+            }
+
+            log.error("[PAYPAL/REFUND_API_ERROR] PayPal API-Fehler beim Refund für Transaktion={}. Status={}",
+                    transactionId, e.getResponseCode(), e);
+            throw new PaymentServiceException("Rückerstattung über PayPal fehlgeschlagen", e);
+
+        } catch (IOException e) {
+            log.error("[PAYPAL/REFUND_TIMEOUT] Verbindungsfehler beim PayPal-Refund für Transaktion={}",
+                    transactionId, e);
+            throw new PaymentServiceException("Netzwerkfehler beim Ausführen der PayPal-Rückerstattung", e);
+
         } catch (Exception e) {
-            log.error("[PAYPAL/REFUND_ERROR] Fehler beim PayPal-Refund für Transaktion={}. Grund: {}",
+            log.error("[PAYPAL/REFUND_ERROR] Unerwarteter Fehler beim PayPal-Refund für Transaktion={}. Grund: {}",
                     transactionId, e.getMessage(), e);
-            throw new PaymentServiceException("Rückerstattung über PayPal fehlgeschlagen: " + e.getMessage());
+            throw new PaymentServiceException("Rückerstattung über PayPal fehlgeschlagen: " + e.getMessage(), e);
         }
     }
 
@@ -209,8 +237,8 @@ public class PaypalStrategy implements PaymentStrategy {
                     new GetOrderInput(
                             providerTransactionId,
                             null,
-                            null,   // paypalAuthAssertion
-                            null    // fields
+                            null,
+                            null
                     );
 
 
@@ -226,14 +254,23 @@ public class PaypalStrategy implements PaymentStrategy {
                     : "UNKNOWN";
 
 
+        } catch (ApiException e) {
+            if (e.getResponseCode() == 404) {
+                log.warn("[PAYPAL/STATUS_NOT_FOUND] Keine PayPal-Transaktion gefunden für ID={}", providerTransactionId);
+            } else {
+                log.error("[PAYPAL/STATUS_API_ERROR] API-Fehler beim Statusabruf für ID={}. Status={}",
+                        providerTransactionId, e.getResponseCode(), e);
+            }
+            return "UNKNOWN";
+
+        } catch (IOException e) {
+            log.error("[PAYPAL/STATUS_TIMEOUT] Netzwerkausfall beim Abrufen des PayPal-Status für ID={}",
+                    providerTransactionId, e);
+            return "UNKNOWN";
+
         } catch (Exception e) {
-
-            log.error(
-                    "[PAYPAL] Live-Status konnte nicht abgerufen werden für ID={}",
-                    providerTransactionId,
-                    e
-            );
-
+            log.error("[PAYPAL/STATUS_ERROR] Unerwarteter Fehler beim Abrufen des Live-Status für ID={}",
+                    providerTransactionId, e);
             return "UNKNOWN";
         }
     }
