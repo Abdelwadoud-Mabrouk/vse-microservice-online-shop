@@ -139,8 +139,13 @@ public sealed class PaymentSucceededKafkaConsumer(
                 : 3;
 
             using var serviceScope = scopeFactory.CreateScope();
+            var orderDetailsProvider = serviceScope.ServiceProvider.GetRequiredService<IOrderDetailsProvider>();
+            var orderDetails = paymentEvent.EmbeddedOrderDetails
+                ?? await orderDetailsProvider.GetAsync(paymentEvent.OrderId, cancellationToken);
             var useCase = serviceScope.ServiceProvider.GetRequiredService<CreateInvoiceUseCase>();
-            var invoiceResult = await useCase.ExecuteAsync(paymentEvent.ToCommand(retryCount), cancellationToken);
+            var invoiceResult = await useCase.ExecuteAsync(
+                paymentEvent.ToCommand(orderDetails, retryCount),
+                cancellationToken);
 
             if (!invoiceResult.Success)
             {

@@ -143,7 +143,6 @@ public sealed class KafkaTestProducer : IDisposable
     public async Task PublishInvalidPaymentSucceededAsync(
         string topic,
         Guid correlationId,
-        Guid orderId,
         string customerEmail,
         CancellationToken cancellationToken)
     {
@@ -156,7 +155,6 @@ public sealed class KafkaTestProducer : IDisposable
             timestamp = DateTimeOffset.UtcNow,
             payload = new
             {
-                orderId,
                 transactionId = "tx-invalid-order",
                 totalAmount = 99.99m,
                 currency = "EUR",

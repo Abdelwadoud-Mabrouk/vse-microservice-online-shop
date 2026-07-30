@@ -14,10 +14,6 @@ import { AuthService } from '../../core/auth/auth.service';
         <p>One Angular frontend for furniture shopping, operations and warehouse workflows.</p>
 
         <div class="login-grid">
-          <button type="button" (click)="login('CUSTOMER')">
-            <strong>Customer shop</strong>
-            <span>Browse furniture, cart, checkout and own orders</span>
-          </button>
           <div class="admin-login-card">
             <strong>Operations admin</strong>
             <span>Use the credentials configured in the environment.</span>
@@ -50,7 +46,7 @@ export class LoginPageComponent {
 
   constructor(private readonly auth: AuthService) {}
 
-  login(role: 'CUSTOMER' | 'ADMIN' | 'WAREHOUSE'): void {
+  login(role: 'ADMIN' | 'WAREHOUSE'): void {
     this.adminLoginError = !this.auth.loginAs(role, this.adminUsername, this.adminPassword);
   }
 }

@@ -9,6 +9,12 @@ public static class InvoiceInfrastructureServiceCollectionExtensions
     {
         services.AddSingleton<IInvoiceRepository, FileInvoiceRepository>();
         services.AddSingleton<IInvoiceDocumentWriter, PdfInvoiceDocumentWriter>();
+        services.AddHttpClient<IOrderDetailsProvider, ShopOrderDetailsClient>((provider, client) =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["SHOP_SERVICE_URL"] ?? "http://shop-service:8087/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
         services.AddSingleton(provider =>
         {
             var configuration = provider.GetRequiredService<IConfiguration>();

@@ -64,7 +64,7 @@ const demoProducts: Product[] = [
 
 @Injectable({providedIn: 'root'})
 export class ShopApiService {
-    private readonly baseUrl = 'http://localhost:8087/api/v1';
+    private readonly baseUrl = '/api/shop/api/v1';
 
     constructor(private readonly http: HttpClient) {
     }

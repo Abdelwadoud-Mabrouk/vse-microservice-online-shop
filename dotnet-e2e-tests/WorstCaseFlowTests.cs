@@ -50,14 +50,12 @@ public sealed class WorstCaseFlowTests
         using var kafka = new KafkaTestProducer(settings);
 
         var correlationId = Guid.NewGuid();
-        var orderId = Guid.NewGuid();
         var customerEmail = $"invalid-payment-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}@example.com";
 
         await client.AssertHealthyAsync(cts.Token);
         await kafka.PublishInvalidPaymentSucceededAsync(
             settings.BillingTopic,
             correlationId,
-            orderId,
             customerEmail,
             cts.Token);
 

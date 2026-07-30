@@ -208,6 +208,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       KAFKA_PAYMENT_SUCCEEDED_TOPIC: ${KAFKA_BILLING_TOPIC:-billing}
       KAFKA_INVOICES_TOPIC: ${KAFKA_INVOICES_TOPIC:-invoices}
+      SHOP_SERVICE_URL: ${SHOP_SERVICE_URL:-http://shop-service:8087/}
 
       KAFKA_INVOICE_CONSUMER_GROUP: ${KAFKA_INVOICE_CONSUMER_GROUP:-invoice-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
@@ -246,6 +247,27 @@ services:
     depends_on:
       shop-db:
         condition: service_healthy
+
+  # =========================
+  # Shop Product Seed
+  # =========================
+  shop-product-seed:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${SHOP_DB_PASSWORD}
+    depends_on:
+      shop-service:
+        condition: service_started
+    command:
+      - sh
+      - -c
+      - |
+        until wget -qO /dev/null http://shop-service:8087/actuator/health; do
+          sleep 2
+        done
+        psql -h shop-db -U ${SHOP_DB_USERNAME} -d shop_db -v ON_ERROR_STOP=1 -f /seed/seed-products.sql
+    volumes:
+      - ./infrastructure/shop-db/seed-products.sql:/seed/seed-products.sql:ro
 
   # =========================
   # BILLING SERVICE (Spring)
@@ -303,10 +325,16 @@ services:
     ports:
       - "3001:80"
     depends_on:
-      - audit-service
-      - shop-service
-      - warehouse-service
-      - invoice-service
+      audit-service:
+        condition: service_started
+      shop-service:
+        condition: service_started
+      shop-product-seed:
+        condition: service_completed_successfully
+      warehouse-service:
+        condition: service_started
+      invoice-service:
+        condition: service_started
     restart: unless-stopped
 
   # =========================

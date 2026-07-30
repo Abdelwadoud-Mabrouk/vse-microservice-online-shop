@@ -88,30 +88,16 @@ export class ProductDetailComponent {
 
 
     mainImage(product: Product): string {
-
-        const image =
-            this.selectedImage ||
-            product.imageUrls?.[0];
-
-        if (!image) {
-            return 'assets/images/product-placeholder.jpg';
-        }
-
-
-        return image.startsWith('http')
-            ? image
-            : this.productServiceService.getApiUrl() + '/' + image;
+        return this.productServiceService.resolveImageUrl(
+            this.selectedImage || product.imageUrls?.[0]
+        );
     }
 
 
     images(product: Product): string[] {
 
         return (product.imageUrls ?? [])
-            .map(image =>
-                image.startsWith('http')
-                    ? image
-                    : this.productServiceService.getApiUrl() + '/' + image
-            );
+            .map(image => this.productServiceService.resolveImageUrl(image));
 
     }
 
