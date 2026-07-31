@@ -36,7 +36,6 @@
     </div>
 </section>
 
-<!-- 1. loading als Signal auslesen: loading() -->
 @if (loading()) {
 
     <div class="loading">
@@ -47,7 +46,6 @@
 
     <section class="product-grid">
 
-        <!-- 2. products als Signal auslesen: products() -->
         @for (product of products(); track product.id) {
 
             <article class="product-card">

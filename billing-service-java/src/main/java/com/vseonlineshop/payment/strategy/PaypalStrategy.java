@@ -13,7 +13,6 @@ import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentProviderResponse;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,6 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PaypalStrategy implements PaymentStrategy {
 
 
@@ -37,6 +35,18 @@ public class PaypalStrategy implements PaymentStrategy {
     private final PaymentTransactionRepository paymentTransactionRepository;
     @Value("${success.page}")
     private String successPageUrl;
+
+    public PaypalStrategy(
+            PaypalConfig paypalConfig,
+            ObjectMapper objectMapper,
+            PaymentTransactionRepository paymentTransactionRepository,
+            @Value("${success.page:http://localhost:3001/shop/checkout/success}") String successPageUrl
+    ) {
+        this.paypalConfig = paypalConfig;
+        this.objectMapper = objectMapper;
+        this.paymentTransactionRepository = paymentTransactionRepository;
+        this.successPageUrl = successPageUrl;
+    }
 
     @Override
     public boolean supports(PaymentMethod method) {

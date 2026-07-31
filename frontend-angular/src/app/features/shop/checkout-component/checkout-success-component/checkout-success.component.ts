@@ -26,28 +26,12 @@ export class CheckoutSuccessComponent implements OnInit {
     ngOnInit(): void {
 
 
-        const orderId = sessionStorage.getItem('lastOrderId');
-
-        if (!orderId) {
-            return;
-        }
-
         const paypalToken = this.route.snapshot.queryParamMap.get('token');
 
-        /*
-          PayPal: Capture über das Backend anstoßen.
-          Das Geld wird eingezogen und die SAGA läuft asynchron im Hintergrund.
-        */
         if (paypalToken) {
-            console.log(paypalToken)
             this.capturePaypal(paypalToken);
         }
 
-        /*
-          Nach dem erfolgreichen Start des Checkouts löschen wir die ID aus dem
-          SessionStorage, damit ein Page-Refresh nicht versehentlich ein doppeltes
-          PayPal-Capture triggert.
-        */
         sessionStorage.removeItem('lastOrderId');
 
     }

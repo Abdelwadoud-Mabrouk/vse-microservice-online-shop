@@ -1,6 +1,6 @@
 import {Component, inject, OnInit, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {ProductServiceService} from "../../../core/service/product-service.service";
+import {ProductService} from "../../../core/api/product.service";
 import {CartService} from "../cart.service";
 import {RouterLink} from "@angular/router";
 import {Product} from "../../../core/models/product.model";
@@ -14,10 +14,9 @@ import {Product} from "../../../core/models/product.model";
 })
 export class ProductListComponentComponent implements OnInit {
 
-    private productService = inject(ProductServiceService);
+    private productService = inject(ProductService);
     readonly cart = inject(CartService);
 
-    // 💡 In Angular 22 als Signals definiert:
     products = signal<Product[]>([]);
     loading = signal<boolean>(false);
     selectedCategory = signal<string>('all');
@@ -28,12 +27,12 @@ export class ProductListComponentComponent implements OnInit {
     hasNext = false;
 
     categories = [
-        { label: 'Alle', slug: 'all' },
-        { label: 'Wohnzimmer', slug: 'wohnzimmer' },
-        { label: 'Schlafzimmer', slug: 'schlafzimmer' },
-        { label: 'Esszimmer', slug: 'esszimmer' },
-        { label: 'Arbeitszimmer', slug: 'arbeitszimmer' },
-        { label: 'Outdoor', slug: 'outdoor' }
+        {label: 'Alle', slug: 'all'},
+        {label: 'Wohnzimmer', slug: 'wohnzimmer'},
+        {label: 'Schlafzimmer', slug: 'schlafzimmer'},
+        {label: 'Esszimmer', slug: 'esszimmer'},
+        {label: 'Arbeitszimmer', slug: 'arbeitszimmer'},
+        {label: 'Outdoor', slug: 'outdoor'}
     ];
 
     ngOnInit(): void {
@@ -41,13 +40,12 @@ export class ProductListComponentComponent implements OnInit {
     }
 
     loadAllProducts(): void {
-        this.loading.set(true); // Signal Wert setzen
+        this.loading.set(true);
 
         this.productService
             .getAllProducts(this.page, this.size, 'name')
             .subscribe({
                 next: response => {
-                    console.log(response);
 
                     this.products.set(response.content || []);
                     this.totalPages = response.totalPages;
@@ -92,7 +90,6 @@ export class ProductListComponentComponent implements OnInit {
                     this.loading.set(false);
                 },
                 error: error => {
-                    console.error(error);
                     this.loading.set(false);
                 }
             });
@@ -103,8 +100,6 @@ export class ProductListComponentComponent implements OnInit {
     }
 
     image(product: Product): string {
-        return product.imageUrls?.[0]
-            ? this.productService.getApiUrl() + product.imageUrls[0]
-            : 'assets/images/product_custom.jpg';
+        return this.productService.formatImageUrl(product.imageUrls?.[0], 'assets/images/product_custom.jpg');
     }
 }
