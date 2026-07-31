@@ -278,6 +278,8 @@ services:
         condition: service_started
       kafka-init:
         condition: service_completed_successfully
+    volumes:
+      - shop-logs:/app/logs
 
   # =========================
   # Shop Product Seed
@@ -447,6 +449,7 @@ volumes:
   audit-logs:
   warehouse-logs:
   invoice-logs:
+  shop-logs:
 
 networks:
   shop-network:
