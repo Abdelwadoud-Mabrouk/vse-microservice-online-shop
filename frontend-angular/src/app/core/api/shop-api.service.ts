@@ -4,6 +4,7 @@ import {Observable, catchError, of} from 'rxjs';
 import {CheckoutResponse, CreateOrderRequest, Order, OrderResponse} from '../models/order.model';
 import {Product} from '../models/product.model';
 import {Customer} from '../models/customer.model';
+import {environment} from "../../../environments/environment";
 
 // @ts-ignore
 const demoProducts: Product[] = [
@@ -64,7 +65,8 @@ const demoProducts: Product[] = [
 
 @Injectable({providedIn: 'root'})
 export class ShopApiService {
-    private readonly baseUrl = '/api/shop/api/v1';
+
+    private baseUrl = environment.apiUrl;
 
     constructor(private readonly http: HttpClient) {
     }

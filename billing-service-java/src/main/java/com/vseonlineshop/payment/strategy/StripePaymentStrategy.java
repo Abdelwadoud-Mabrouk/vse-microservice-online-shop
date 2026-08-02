@@ -1,6 +1,8 @@
 package com.vseonlineshop.payment.strategy;
 
 import com.stripe.StripeClient;
+import com.stripe.exception.ApiConnectionException;
+import com.stripe.exception.InvalidRequestException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
@@ -42,7 +44,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
 
 
     @Override
-    public SmallProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
+    public PaymentProviderResponse charge(PaymentRequest orderRequest, UUID paymentId) {
         log.info("[STRIPE/START] Initialisiere Checkout-Session für Order-ID={} via {}",
                 orderRequest.orderId(), orderRequest.paymentMethod());
 
@@ -96,16 +98,31 @@ public class StripePaymentStrategy implements PaymentStrategy {
             log.info("[STRIPE/SUCCESS] Checkout-Session erfolgreich erstellt. Stripe-ID={}, URL={}",
                     session.getId(), session.getUrl());
 
-            return new SmallProviderResponse(
+            return new PaymentProviderResponse(
                     session.getUrl(),
                     session.getId(),
                     session.toJson()
             );
 
+        } catch (InvalidRequestException e) {
+            log.warn("[STRIPE/INVALID_REQ] Ungültige Parameter für Order-ID={}. Grund: {}",
+                    orderRequest.orderId(), e.getMessage());
+            throw new PaymentServiceException("Ungültige Zahlungsanforderung: " + e.getMessage(), e);
+
+        } catch (ApiConnectionException e) {
+            log.error("[STRIPE/TIMEOUT] Keine Verbindung zu Stripe für Order-ID={}",
+                    orderRequest.orderId(), e);
+            throw new PaymentServiceException("Netzwerkfehler bei Verbindung zu Stripe", e);
+
         } catch (StripeException e) {
-            log.error("[STRIPE/ERROR] Fehler bei der Stripe Session-Erstellung für Order-ID={}. Grund: {}",
+            log.error("[STRIPE/ERROR] Fehler bei Stripe Session-Erstellung für Order-ID={}. Code={}",
+                    orderRequest.orderId(), e.getCode(), e);
+            throw new PaymentServiceException("Zahlung über Stripe fehlgeschlagen: " + e.getMessage(), e);
+
+        } catch (Exception e) {
+            log.error("[STRIPE/UNEXPECTED_ERROR] Unerwarteter Systemfehler bei Stripe Session-Erstellung für Order-ID={}. Grund: {}",
                     orderRequest.orderId(), e.getMessage(), e);
-            throw new PaymentServiceException("Zahlung über Stripe fehlgeschlagen");
+            throw new PaymentServiceException("Unerwarteter Fehler bei der Zahlungsabwicklung: " + e.getMessage(), e);
         }
     }
 
@@ -124,13 +141,11 @@ public class StripePaymentStrategy implements PaymentStrategy {
                 Session session = stripeClient.v1().checkout().sessions().retrieve(transactionId);
                 refundBuilder.setPaymentIntent(session.getPaymentIntent());
             } else {
-                // Direkte PaymentIntent-ID
                 refundBuilder.setPaymentIntent(transactionId);
             }
 
             RefundCreateParams params = refundBuilder.build();
 
-            // Refund über das Stripe V1 SDK ausführen
             Refund refund = stripeClient.v1().refunds().create(params);
 
             log.info("[STRIPE/REFUND_SUCCESS] Refund erfolgreich ausgeführt. Stripe-Refund-ID={}, Status={}",
@@ -138,10 +153,22 @@ public class StripePaymentStrategy implements PaymentStrategy {
 
             return refund.getId();
 
+        } catch (InvalidRequestException e) {
+            log.warn("[STRIPE/REFUND_DECLINED] Refund nicht möglich für Transaktion={}. Grund: {}",
+                    transactionId, e.getMessage());
+            throw new PaymentServiceException("Rückerstattung nicht möglich: " + e.getMessage(), e);
+
+        } catch (ApiConnectionException e) {
+            log.error("[STRIPE/REFUND_TIMEOUT] Verbindungsfehler beim Stripe-Refund für Transaktion={}",
+                    transactionId, e);
+            throw new PaymentServiceException("Netzwerkfehler beim Ausführen der Rückerstattung", e);
+
         } catch (StripeException e) {
-            log.error("[STRIPE/REFUND_ERROR] Fehler beim Stripe-Refund für Transaktion={}. Grund: {}",
-                    transactionId, e.getMessage(), e);
-            throw new PaymentServiceException("Rückerstattung über Stripe fehlgeschlagen: " + e.getMessage());
+            log.error("[STRIPE/REFUND_ERROR] Fehler beim Stripe-Refund für Transaktion={}. Code={}",
+                    transactionId, e.getCode(), e);
+            throw new PaymentServiceException("Rückerstattung über Stripe fehlgeschlagen", e);
+        } catch (Exception e) {
+            throw new PaymentServiceException("Unerwarteter Fehler bei der Zahlungsabwicklung: " + e.getMessage(), e);
         }
     }
 
@@ -154,10 +181,22 @@ public class StripePaymentStrategy implements PaymentStrategy {
                     .retrieve(providerTransactionId);
 
             return session.getPaymentStatus();
-        } catch (StripeException e) {
-            log.error("[STRIPE] Live-Status konnte nicht von Stripe abgerufen werden für ID={}",
+        } catch (InvalidRequestException e) {
+            log.warn("[STRIPE/STATUS_NOT_FOUND] Keine Session gefunden für ID={}. Grund: {}",
+                    providerTransactionId, e.getMessage());
+            return "UNKNOWN";
+
+        } catch (ApiConnectionException e) {
+            log.error("[STRIPE/STATUS_TIMEOUT] Verbindungsfehler beim Statusabruf für ID={}",
                     providerTransactionId, e);
             return "UNKNOWN";
+
+        } catch (StripeException e) {
+            log.error("[STRIPE/STATUS_ERROR] Fehler beim Abrufen des Status für ID={}. Code={}",
+                    providerTransactionId, e.getCode(), e);
+            return "UNKNOWN";
+        } catch (Exception e) {
+            throw new PaymentServiceException("Unerwarteter Fehler bei der Zahlungsabwicklung: " + e.getMessage(), e);
         }
     }
 

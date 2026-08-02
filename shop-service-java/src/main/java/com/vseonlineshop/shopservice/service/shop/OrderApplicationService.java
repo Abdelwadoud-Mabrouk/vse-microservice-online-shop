@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 
 @Service
 @RequiredArgsConstructor
@@ -36,12 +37,13 @@ public class OrderApplicationService {
     private final ToolService toolService;
 
 
+
     // ── Create Order ─────────────────────────────────────────────────────────
     public CheckoutResponse createOrder(OrderRequest request) {
         Order order;
         long start = System.currentTimeMillis();
 
-        // ── STEP 1: Initiales Anlegen ───────────────────
+        // Initiales Anlegen
         UUID correlationId = UUID.randomUUID();
         try {
             order = orderTransactionHelper.createInitialOrder(request, correlationId);
@@ -49,7 +51,7 @@ public class OrderApplicationService {
                     "Order erfolgreich angelegt",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus()
                     ))
@@ -62,7 +64,7 @@ public class OrderApplicationService {
                     "Konnte initiale Order nicht in DB anlegen",
                     kv("correlationId", correlationId),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "errorCode", "CREATION_ORDER_FAILED",
                             "errorMessage", ex.getMessage()
                     ))
@@ -74,7 +76,7 @@ public class OrderApplicationService {
         ReservationResponse reservation = null;
 
         try {
-            // STEP 2: Warehouse reservieren
+            // Warehouse reservieren
             try {
                 reservation = warehouseClient.reserve(order);
             } catch (HttpClientErrorException ex) {
@@ -83,7 +85,7 @@ public class OrderApplicationService {
                         "Bestand reicht nicht fuer Order",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "httpStatus", ex.getStatusCode().value(),
                                 "errorMessage", ex.getMessage()
@@ -96,13 +98,16 @@ public class OrderApplicationService {
 
             } catch (ResourceAccessException | HttpServerErrorException ex) {
                 // 5xx Server Error oder Timeout/Connection Refused: Service wirklich DOWN
+                String errorMessage = (ex.getMostSpecificCause() != null)
+                        ? ex.getMostSpecificCause().getMessage()
+                        : ex.getMessage();
                 log.error(
                         "Lager-Service nicht erreichbar",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
-                                "errorMessage", ex.getMessage()
+                                "errorMessage", errorMessage != null ? errorMessage : "Verbindung fehlgeschlagen (Connection refused/Timeout)"
                         )),
                         ex
                 );
@@ -116,7 +121,7 @@ public class OrderApplicationService {
                         "Warehouse lieferte eine leere Reservierung",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId()
                         ))
                 );
@@ -137,7 +142,7 @@ public class OrderApplicationService {
                         "Payment Request vom Billing-Service abgelehnt",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "reservationId", reservation.reservationId(),
                                 "httpStatus", ex.getStatusCode().value(),
@@ -156,7 +161,7 @@ public class OrderApplicationService {
                         "Payment-Service nach allen Retry-Versuchen nicht erreichbar",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "status", order.getStatus(),
                                 "errorMessage", ex.getMessage()
@@ -171,20 +176,12 @@ public class OrderApplicationService {
 
             }
 
-            // Fall 1: Sofortiger Zahlungsfehler vom Provider
-            // todo: Check if we need it
-            if ("FAILED".equalsIgnoreCase(String.valueOf(payment.status()))) {
-                toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.CANCELLED, "PAYMENT_FAILED", null);
-                throw new PaymentServiceException("Zahlung fehlgeschlagen.");
-            }
-
-
             CheckoutResponse checkoutResponse = orderTransactionHelper.updateToAwaitingPayment(order.getId(), payment);
             log.info(
                     "Checkout erfolgreich gestartet",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "paymentStatus", payment.status(),
                             "reservationId", reservation.reservationId(),
@@ -200,7 +197,7 @@ public class OrderApplicationService {
                     "Externer Service nicht verfügbar",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "errorCode", ex.getErrorCode(),
@@ -215,7 +212,7 @@ public class OrderApplicationService {
                     "Business Fehler im Order-Prozess",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "errorCode", ex.getErrorCode(),
@@ -230,7 +227,7 @@ public class OrderApplicationService {
                     "Payment Fehler im Order-Prozess",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "errorMessage", ex.getMessage()
@@ -247,7 +244,7 @@ public class OrderApplicationService {
                     "Unerwarteter Fehler im Order-Prozess",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "errorMessage", ex.getMessage()

@@ -13,6 +13,8 @@ services:
       - "5432:5432"
     volumes:
       - audit-db-data:/var/lib/postgresql/data
+    networks:
+      - shop-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AUDIT_DB_USER:?Set AUDIT_DB_USER in .env} -d ${AUDIT_DB_NAME:?Set AUDIT_DB_NAME in .env}"]
       interval: 5s
@@ -33,6 +35,8 @@ services:
       - "5433:5432"
     volumes:
       - shop-db-data:/var/lib/postgresql/data
+    networks:
+      - shop-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shop_user -d shop_db"]
       interval: 5s
@@ -53,6 +57,8 @@ services:
       - "5435:5432"
     volumes:
       - billing-db-data:/var/lib/postgresql/data
+    networks: # <-- WICHTIG! War vorher nicht im Netz
+      - shop-network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U billing_user -d billing_db" ]
       interval: 5s
@@ -73,6 +79,8 @@ services:
       - "5434:5432"
     volumes:
       - warehouse-db-data:/var/lib/postgresql/data
+    networks:
+      - shop-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${WAREHOUSE_DB_USER:?Set WAREHOUSE_DB_USER in .env} -d ${WAREHOUSE_DB_NAME:?Set WAREHOUSE_DB_NAME in .env}"]
       interval: 5s
@@ -88,6 +96,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - shop-network
 
   # =========================
   # Kafka Broker
@@ -107,6 +117,8 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - shop-network
 
   # =========================
   # Kafka Topics
@@ -115,6 +127,8 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     depends_on:
       - kafka
+    networks:
+      - shop-network
     command:
       - bash
       - -c
@@ -148,6 +162,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       LOG_DIRECTORY: /app/logs
       LOG_RETENTION_DAYS: 14
+    networks:
+      - shop-network
     depends_on:
       audit-db:
         condition: service_healthy
@@ -178,6 +194,8 @@ services:
       LOG_RETENTION_DAYS: 14
       KAFKA_WAREHOUSE_TOPIC: ${KAFKA_WAREHOUSE_TOPIC:-warehouse}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    networks:
+      - shop-network
     depends_on:
       audit-service:
         condition: service_started
@@ -208,12 +226,14 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       KAFKA_PAYMENT_SUCCEEDED_TOPIC: ${KAFKA_BILLING_TOPIC:-billing}
       KAFKA_INVOICES_TOPIC: ${KAFKA_INVOICES_TOPIC:-invoices}
+      SUCCESS_PAGE_URL: http://localhost:3001/shop/checkout/success
       SHOP_SERVICE_URL: ${SHOP_SERVICE_URL:-http://shop-service:8087/}
-
       KAFKA_INVOICE_CONSUMER_GROUP: ${KAFKA_INVOICE_CONSUMER_GROUP:-invoice-service}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       LOG_DIRECTORY: /app/logs
       LOG_RETENTION_DAYS: 14
+    networks:
+      - shop-network
     depends_on:
       audit-service:
         condition: service_started
@@ -227,7 +247,6 @@ services:
       - invoice-data:/app/data/invoices
       - invoice-logs:/app/logs
 
-
   # =========================
   # SHOP SERVICE (Spring)
   # =========================
@@ -239,14 +258,28 @@ services:
       - "8090:8087"
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://shop-db:5432/shop_db
+      SHOP_DB_URL: jdbc:postgresql://shop-db:5432/shop_db
+      SHOP_DB_USERNAME: ${SHOP_DB_USERNAME:-shop_user}
+      SHOP_DB_PASSWORD: ${SHOP_DB_PASSWORD:-shop_password}
 
-      SHOP_DB_URL: ${SHOP_DB_URL}
-      SHOP_DB_USERNAME: ${SHOP_DB_USERNAME}
-      SHOP_DB_PASSWORD: ${SHOP_DB_PASSWORD}
-
+      # Interne Container-URLs explizit überschreiben:
+      SERVICES_WAREHOUSE_URL: http://warehouse-service:8080
+      SERVICES_PAYMENT_URL: http://billing-service:8089/api/v1/billing
+    networks:
+      - shop-network
     depends_on:
       shop-db:
         condition: service_healthy
+      billing-service: # Sicherstellen, dass das Billing-Service gestartet ist
+        condition: service_started
+      warehouse-service: # Sicherstellen, dass das Warehouse-Service gestartet ist
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
+    volumes:
+      - shop-logs:/app/logs
 
   # =========================
   # Shop Product Seed
@@ -254,7 +287,9 @@ services:
   shop-product-seed:
     image: postgres:16-alpine
     environment:
-      PGPASSWORD: ${SHOP_DB_PASSWORD}
+      PGPASSWORD: ${SHOP_DB_PASSWORD:-shop_password}
+    networks:
+      - shop-network
     depends_on:
       shop-service:
         condition: service_started
@@ -265,7 +300,7 @@ services:
         until wget -qO /dev/null http://shop-service:8087/actuator/health; do
           sleep 2
         done
-        psql -h shop-db -U ${SHOP_DB_USERNAME} -d shop_db -v ON_ERROR_STOP=1 -f /seed/seed-products.sql
+        psql -h shop-db -U ${SHOP_DB_USERNAME:-shop_user} -d shop_db -v ON_ERROR_STOP=1 -f /seed/seed-products.sql
     volumes:
       - ./infrastructure/shop-db/seed-products.sql:/seed/seed-products.sql:ro
 
@@ -281,36 +316,57 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
 
-      BILLING_DB_URL: ${BILLING_DB_URL}
-      BILLING_DB_USERNAME: ${BILLING_DB_USERNAME}
-      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD}
+      # Sichere DB-Verbindung (Nutzt Umgebungsvariable oder Standard-Docker-URL)
+      SPRING_DATASOURCE_URL: ${BILLING_DB_URL:-jdbc:postgresql://billing-db:5432/billing_db}
+      SPRING_DATASOURCE_USERNAME: ${BILLING_DB_USERNAME:-billing_user}
+      SPRING_DATASOURCE_PASSWORD: ${BILLING_DB_PASSWORD:-billing_password}
 
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
 
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
-      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID}
 
+      SUCCESS_PAGE_URL: ${SUCCESS_PAGE_URL}
+    networks:
+      - shop-network
     depends_on:
       billing-db:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   # =========================
-  #  Strip
+  # NGROK TUNNEL
   # =========================
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok-tunnel
+    restart: always
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "billing-service:8089"
+    ports:
+      - "4040:4040"
+    networks:
+      - shop-network
+    depends_on:
+      - billing-service
+
+    # =========================
+    # Stripe CLI
+    # =========================
   stripe-cli:
       image: stripe/stripe-cli
       container_name: stripe-cli
-      profiles: ["stripe-webhook"]
-      command:
-        - listen
-        - --api-key
-        - ${STRIPE_SECRET_KEY}
-        - --forward-to
-        - http://billing-service:8089/api/v1/billing/webhook/stripe
-      volumes:
-        - ~/.config/stripe:/root/.config/stripe
+      environment:
+        STRIPE_API_KEY: ${STRIPE_SECRET_KEY}
+      command: listen --forward-to http://billing-service:8089/api/v1/billing/webhook/stripe
+      networks:
+        - shop-network
       depends_on:
         - billing-service
       restart: unless-stopped
@@ -324,6 +380,8 @@ services:
     container_name: frontend-angular
     ports:
       - "3001:80"
+    networks:
+      - shop-network
     depends_on:
       audit-service:
         condition: service_started
@@ -345,6 +403,8 @@ services:
     command: -config.file=/etc/loki/loki-config.yml
     ports:
       - "3100:3100"
+    networks:
+      - shop-network
     volumes:
       - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
@@ -358,6 +418,8 @@ services:
       - "4317:4317"
       - "4318:4318"
       - "13133:13133"
+    networks:
+      - shop-network
     volumes:
       - ./observability/otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
 
@@ -370,6 +432,8 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER in .env}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+    networks:
+      - shop-network
     volumes:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -385,3 +449,8 @@ volumes:
   audit-logs:
   warehouse-logs:
   invoice-logs:
+  shop-logs:
+
+networks:
+  shop-network:
+    driver: bridge

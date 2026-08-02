@@ -108,4 +108,94 @@ INSERT INTO product_images (product_id, image_url)
 SELECT product_id, image_url
 FROM product_image;
 
+-- ============================================================
+-- PRODUCT IMAGES
+-- Generated automatically
+-- ============================================================
+
+INSERT INTO products
+(
+    id,
+    sku,
+    name,
+    slug,
+    description,
+    category_id,
+    price,
+    original_price,
+    width_cm,
+    height_cm,
+    depth_cm,
+    weight_kg,
+    material,
+    color,
+    active,
+    version,
+    created_at,
+    updated_at,
+    stock_quantity,
+    brand
+)
+VALUES
+    (
+        '11111111-1111-4111-8111-111111111111',
+        'SKU-CHAIR-OAK',
+        'Stuhl Eiche Natur mit Stoffbezug',
+        'stuhl-eiche-natur-stoffbezug',
+        'Eleganter Esszimmerstuhl aus massivem Eichenholz mit bequemem Stoffbezug. Zeitloses Design für moderne Essbereiche.',
+        (SELECT id FROM categories WHERE slug = 'esszimmer'),
+        249.00,
+        349.00,
+        52,
+        82,
+        58,
+        8.5,
+        'Eiche/Stoff',
+        'Beige/Natur',
+        true,
+        0,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        30,
+        'NordLiving'
+    )
+    ON CONFLICT (id) DO UPDATE SET
+    sku = EXCLUDED.sku,
+                            name = EXCLUDED.name,
+                            slug = EXCLUDED.slug,
+                            description = EXCLUDED.description,
+                            category_id = EXCLUDED.category_id,
+                            price = EXCLUDED.price,
+                            original_price = EXCLUDED.original_price,
+                            material = EXCLUDED.material,
+                            color = EXCLUDED.color,
+                            active = true,
+                            stock_quantity = EXCLUDED.stock_quantity,
+                            brand = EXCLUDED.brand,
+                            updated_at = CURRENT_TIMESTAMP;
+
+
+DELETE FROM product_images
+WHERE product_id = '11111111-1111-4111-8111-111111111111';
+
+
+INSERT INTO product_images
+(product_id, image_url)
+VALUES
+    (
+        '11111111-1111-4111-8111-111111111111',
+        'https://images.pexels.com/photos/18289778/pexels-photo-18289778.jpeg?auto=compress&cs=tinysrgb&w=1200'
+    ),
+    (
+        '11111111-1111-4111-8111-111111111111',
+        'https://images.pexels.com/photos/7243801/pexels-photo-7243801.jpeg?auto=compress&cs=tinysrgb&w=1200'
+    ),
+    (
+        '11111111-1111-4111-8111-111111111111',
+        'https://images.pexels.com/photos/7607331/pexels-photo-7607331.jpeg?auto=compress&cs=tinysrgb&w=1200'
+    ),
+    (
+        '11111111-1111-4111-8111-111111111111',
+        'https://images.pexels.com/photos/7243801/pexels-photo-7243801.jpeg?auto=compress&cs=tinysrgb&w=1200'
+    );
 COMMIT;

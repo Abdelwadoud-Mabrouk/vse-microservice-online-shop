@@ -1,4 +1,4 @@
-import {ProductServiceService} from "../../../core/service/product-service.service";
+import {ProductService} from "../../../core/api/product.service";
 import {CartService} from "../cart.service";
 import {Product} from "../../../core/models/product.model";
 import {Component, Input, SimpleChanges} from "@angular/core";
@@ -31,12 +31,12 @@ export class ProductDetailComponent {
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['slug'] && this.slug) {
-            this.product$ = this.productServiceService.getProductBySlug(this.slug);
+            this.product$ = this.productService.getProductBySlug(this.slug);
         }
     }
 
     constructor(
-        private readonly productServiceService: ProductServiceService,
+        private readonly productService: ProductService,
         private readonly cart: CartService
     ) {
     }
@@ -46,10 +46,6 @@ export class ProductDetailComponent {
         this.cart.add(product);
     }
 
-
-    // ===============================
-    // Image Handling
-    // ===============================
 
     private furnitureImages(product: Product): string[] {
 
@@ -88,17 +84,17 @@ export class ProductDetailComponent {
 
 
     mainImage(product: Product): string {
-        return this.productServiceService.resolveImageUrl(
-            this.selectedImage || product.imageUrls?.[0]
-        );
+        const image = this.selectedImage || product.imageUrls?.[0];
+        return this.productService.formatImageUrl(image, 'assets/images/product-placeholder.jpg');
     }
-
 
     images(product: Product): string[] {
+        if (!product.imageUrls || product.imageUrls.length === 0) {
+            return ['assets/images/product-placeholder.jpg'];
+        }
 
-        return (product.imageUrls ?? [])
-            .map(image => this.productServiceService.resolveImageUrl(image));
-
+        return product.imageUrls.map(img =>this.productService.formatImageUrl(img));
     }
+
 
 }

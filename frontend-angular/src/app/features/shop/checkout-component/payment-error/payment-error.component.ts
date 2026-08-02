@@ -1,11 +1,13 @@
 import {Component} from '@angular/core';
-import {Router} from '@angular/router';
+import {Router, RouterLink} from '@angular/router';
 
 
 @Component({
     selector: 'app-payment-error',
     standalone: true,
-    imports: [],
+    imports: [
+        RouterLink
+    ],
     templateUrl: './payment-error.component.html',
     styleUrl: './payment-error.component.scss'
 })

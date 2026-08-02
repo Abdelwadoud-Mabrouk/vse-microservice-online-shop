@@ -28,10 +28,6 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
 
 
-    // ==========================================================
-    // Landing Page
-    // ==========================================================
-
     public Page<ProductResponse> getAllActiveProducts(
             int page,
             int size,
@@ -45,10 +41,6 @@ public class ProductService {
                 .map(this::mapToResponse);
     }
 
-
-    // ==========================================================
-    // Kategorie
-    // ==========================================================
 
     public Page<ProductResponse> getProductsByCategory(
             String categorySlug,
@@ -64,7 +56,6 @@ public class ProductService {
         );
 
 
-        // 1. Kategorie über den Slug finden
         Category category = categoryRepository.findBySlug(categorySlug)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -73,13 +64,11 @@ public class ProductService {
                 );
 
 
-        // 2. Alle Kategorien sammeln
         List<UUID> categoryIds = new ArrayList<>();
 
         collectCategoryIds(category, categoryIds);
 
 
-        // 3. Produkte aus allen Kategorien laden
         return productRepository
                 .findByCategoryIdInAndActiveTrue(categoryIds, pageable)
                 .map(this::mapToResponse);
@@ -101,9 +90,7 @@ public class ProductService {
             }
         }
     }
-    // ==========================================================
-    // Suche
-    // ==========================================================
+
 
     public Page<ProductResponse> searchProducts(
             String query,
@@ -124,9 +111,6 @@ public class ProductService {
     }
 
 
-    // ==========================================================
-    // Farbe
-    // ==========================================================
 
     public Page<ProductResponse> getProductsByColor(
             String color,
@@ -143,9 +127,6 @@ public class ProductService {
     }
 
 
-    // ==========================================================
-    // Material
-    // ==========================================================
 
     public Page<ProductResponse> getProductsByMaterial(
             String material,
@@ -162,9 +143,6 @@ public class ProductService {
     }
 
 
-    // ==========================================================
-    // Preisbereich
-    // ==========================================================
 
     public Page<ProductResponse> getProductsByPriceRange(
             BigDecimal minPrice,
@@ -186,9 +164,6 @@ public class ProductService {
     }
 
 
-    // ==========================================================
-    // Kombination mehrerer Filter (Specification)
-    // ==========================================================
 
     public Page<ProductResponse> filterProducts(
             ProductFilter filter,
@@ -199,20 +174,11 @@ public class ProductService {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
 
-        // TODO:
-        // ProductSpecification erstellen
-        // return productRepository.findAll(specification, pageable)
-        //        .map(this::mapToResponse);
-
         throw new UnsupportedOperationException(
                 "Combined filter not implemented yet."
         );
     }
 
-
-    // ==========================================================
-    // Produktdetails
-    // ==========================================================
 
     public ProductResponse getProductById(UUID id) {
 
@@ -238,7 +204,6 @@ public class ProductService {
         return mapToResponse(product);
     }
 
-    //  Alle Produkte (für Admin-Bereich)
     public Page<ProductResponse> getAllProducts(int page, int size, String sortBy) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
         return productRepository.findAll(pageable)

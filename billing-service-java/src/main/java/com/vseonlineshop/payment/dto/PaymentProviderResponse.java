@@ -1,6 +1,6 @@
 package com.vseonlineshop.payment.dto;
 
-public record SmallProviderResponse(
+public record PaymentProviderResponse(
         String approvalUrl,
         String providerTransactionId,
         String rawResponse

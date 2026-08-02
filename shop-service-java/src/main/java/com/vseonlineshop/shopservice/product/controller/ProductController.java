@@ -20,15 +20,6 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // toDo: Shop anpassen ==> Add Table of prodcuts + kafka
-    //       Angular: Herro Page: All Prodcuten listen (Pagin), Filer mit Categorie, Header anapssen
-
-
-
-    // ==========================================================
-    // Landing Page
-    // GET /api/products?page=0&size=12&sortBy=name
-    // ==========================================================
 
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> getAllProducts(
@@ -42,11 +33,6 @@ public class ProductController {
         );
     }
 
-
-    // ==========================================================
-    // Kategorie
-    // GET /api/products/category/sofas
-    // ==========================================================
 
     @GetMapping("/category/{slug}")
     public ResponseEntity<Page<ProductResponse>> getProductsByCategory(
@@ -62,11 +48,6 @@ public class ProductController {
     }
 
 
-    // ==========================================================
-    // Suche
-    // GET /api/products/search?query=sofa
-    // ==========================================================
-
     @GetMapping("/search")
     public ResponseEntity<Page<ProductResponse>> searchProducts(
             @RequestParam String query,
@@ -79,12 +60,6 @@ public class ProductController {
                 productService.searchProducts(query, page, size, sortBy)
         );
     }
-
-
-    // ==========================================================
-    // Farbe
-    // GET /api/products/color/white
-    // ==========================================================
 
     @GetMapping("/color/{color}")
     public ResponseEntity<Page<ProductResponse>> getProductsByColor(
@@ -99,12 +74,6 @@ public class ProductController {
         );
     }
 
-
-    // ==========================================================
-    // Material
-    // GET /api/products/material/leather
-    // ==========================================================
-
     @GetMapping("/material/{material}")
     public ResponseEntity<Page<ProductResponse>> getProductsByMaterial(
             @PathVariable String material,
@@ -118,11 +87,6 @@ public class ProductController {
         );
     }
 
-
-    // ==========================================================
-    // Preis
-    // GET /api/products/price?min=100&max=500
-    // ==========================================================
 
     @GetMapping("/price")
     public ResponseEntity<Page<ProductResponse>> getProductsByPrice(
@@ -139,11 +103,6 @@ public class ProductController {
     }
 
 
-    // ==========================================================
-    // Kombinierte Filter
-    // GET /api/products/filter?...alle Filter...
-    // ==========================================================
-
     @GetMapping("/filter")
     public ResponseEntity<Page<ProductResponse>> filterProducts(
             ProductFilter filter,
@@ -157,12 +116,6 @@ public class ProductController {
         );
     }
 
-
-    // ==========================================================
-    // Produkt über Slug
-    // GET /api/products/details/ecksofa-nuvola
-    // ==========================================================
-
     @GetMapping("/details/{slug}")
     public ResponseEntity<ProductResponse> getProductBySlug(
             @PathVariable String slug
@@ -173,11 +126,6 @@ public class ProductController {
         );
     }
 
-
-    // ==========================================================
-    // Produkt über UUID
-    // GET /api/products/{id}
-    // ==========================================================
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> getProductById(

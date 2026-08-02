@@ -15,7 +15,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 
-public class PaymentService {
+public class BillingService {
 
     private final PaymentProcessService paymentProcessService;
 
@@ -55,6 +55,20 @@ public class PaymentService {
             MDC.clear();
         }
 
+    }
+
+    public PaymentResponse getByCorrelationId(UUID correlationId) {
+        MDC.put(
+                "correlationId",
+                correlationId.toString()
+        );
+
+        try {
+            return paymentProcessService.getByCorrelationId(correlationId);
+
+        } finally {
+            MDC.clear();
+        }
     }
 
     public String getStatus(String transactionId, UUID correlationId) {
