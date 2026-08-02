@@ -12,12 +12,6 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 
 
-/**
- * Echte Implementierung: RestTemplate / WebClient auf ${payment.base-url}/payments
- * Der paymentMethod aus dem Order-Objekt wird in den Request eingebaut,
- * damit das echte Billing-Service später den richtigen Provider (PayPal/Stripe/Klarna)
- * aufrufen kann.
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -65,7 +59,6 @@ public class BillingService {
 
 
     public RefundResponseDto refund(Order order) {
-        log.info("[BillingService] Starte Refund-Kompensation für Order={}", order.getId());
 
         RefundRequestDto request = new RefundRequestDto(
                 order.getPaymentMethod(),
@@ -77,7 +70,6 @@ public class BillingService {
     }
 
     public Map<String, String> capturePaypal(String token) {
-        log.info("[PaymentClient] Sende PayPal-Capture-Request für Token={}", token);
         return paymentGateway.capturePaypal(token);
     }
 }

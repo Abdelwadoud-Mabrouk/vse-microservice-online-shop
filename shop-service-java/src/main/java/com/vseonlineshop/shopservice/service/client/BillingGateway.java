@@ -16,11 +16,11 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
@@ -33,18 +33,6 @@ public class BillingGateway {
         this.restClient = restClient;
     }
 
-    /**
-     * Erstellt eine Map, die auch null-Werte sicher als String verarbeitet.
-     */
-    private Map<String, Object> safeContext(Object... keyValues) {
-        Map<String, Object> map = new HashMap<>();
-        for (int i = 0; i < keyValues.length; i += 2) {
-            String key = (String) keyValues[i];
-            Object value = keyValues[i + 1];
-            map.put(key, value != null ? value : "null");
-        }
-        return map;
-    }
 
     @Retry(name = "payment")
     public PaymentResponse pay(UUID correlationId, PaymentRequest request, UUID orderId) {
@@ -209,7 +197,7 @@ public class BillingGateway {
                     })
                     .body(new ParameterizedTypeReference<>() {});
 
-            String status = (response != null) ? response.get("status") : "UNKNOWN";
+            String status = (response != null) ? response.get("message") : "UNKNOWN";
 
             log.info(
                     "PayPal Capture erfolgreich",

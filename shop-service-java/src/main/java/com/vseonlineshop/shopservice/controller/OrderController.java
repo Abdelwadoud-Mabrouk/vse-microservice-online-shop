@@ -55,7 +55,6 @@ public class OrderController {
     })
     public ResponseEntity<OrderDetailsResponse> getOrder(
             @Parameter(description = "UUID der Bestellung") @PathVariable UUID id) {
-        log.debug("[OrderController] Order {} abfragen", id);
         return ResponseEntity.ok(orderApplicationService.getOrder(id));
     }
 

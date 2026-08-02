@@ -14,16 +14,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 
-/**
- * Fire-and-forget Kafka Publisher.
- * Fehler werden geloggt aber NICHT propagiert – der Geschäftsfluss
- * darf durch einen Kafka-Ausfall nicht blockiert werden.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -139,7 +134,7 @@ public class KafkaEventPublisher {
             log.error(
                     "Kafka Event konnte nicht gesendet werden - Order ist null",
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "eventType", eventType,
                             "topic", topic
                     ))
@@ -162,7 +157,7 @@ public class KafkaEventPublisher {
                     "Kafka Event erfolgreich gesendet",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "eventType", eventType,
                             "orderId", order.getId(),
                             "topic", topic,
@@ -176,7 +171,7 @@ public class KafkaEventPublisher {
                     "Kafka Event Senden fehlgeschlagen",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "eventType", eventType,
                             "orderId", order.getId(),
                             "topic", topic,

@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Component
@@ -41,9 +42,6 @@ public class PaymentEventConsumer {
     private final BillingService paymentClient;
 
 
-    /**
-     * Hört auf das Payment-Topic und fängt die asynchrone Erfolgsmeldung ab.
-     */
 
     @KafkaListener(
             topics = "${kafka.topics.payment}",
@@ -57,7 +55,7 @@ public class PaymentEventConsumer {
                 "Kafka Event empfangen",
                 kv("correlationId", domainEvent.correlationId()),
                 kv("service", "shop-service"),
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "eventType", domainEvent.eventType(),
                         "sourceService", domainEvent.service()
                 ))
@@ -85,7 +83,7 @@ public class PaymentEventConsumer {
                     "PAYMENT_SUCCEEDED Event wird verarbeitet",
                     kv("correlationId", domainEvent.correlationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", payload.orderId(),
                             "eventType", domainEvent.eventType()
                     ))
@@ -100,7 +98,7 @@ public class PaymentEventConsumer {
                         "Order bereits final - Event ignoriert",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "status", order.getStatus()
                         ))
@@ -121,7 +119,7 @@ public class PaymentEventConsumer {
                         "Warehouse Commit fehlgeschlagen - starte Refund Compensation",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "errorMessage", ex.getMessage()
                         )),
@@ -142,7 +140,7 @@ public class PaymentEventConsumer {
                         "Unerwartete Warehouse Commit Antwort",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "commitResponse", String.valueOf(commitResponse)
                         ))
@@ -159,7 +157,7 @@ public class PaymentEventConsumer {
                     "Order erfolgreich abgeschlossen",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", OrderStatus.COMPLETED
                     ))
@@ -176,7 +174,7 @@ public class PaymentEventConsumer {
                             order != null ? order.getCorrelationId() : domainEvent.correlationId()
                     ),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order != null ? order.getId() : "N/A",
                             "errorMessage", ex.getMessage()
                     )),
@@ -207,7 +205,7 @@ public class PaymentEventConsumer {
                 "Warehouse Dispatch fehlgeschlagen - starte Compensation",
                 kv("correlationId", order.getCorrelationId()),
                 kv("service", "shop-service"),
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "orderId", order.getId(),
                         "reason", reason
                 ))
@@ -225,7 +223,7 @@ public class PaymentEventConsumer {
                     "Refund erfolgreich - Order Rollback abgeschlossen",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "refundTransactionId", refundResponse.providerRefundTransactionId(),
@@ -240,7 +238,7 @@ public class PaymentEventConsumer {
                     "Refund beim Billing-Service fehlgeschlagen",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "reason", reason,
                             "errorMessage", refundEx.getMessage()
@@ -268,7 +266,7 @@ public class PaymentEventConsumer {
                     "PAYMENT_FAILED Event wird verarbeitet",
                     kv("correlationId", domainEvent.correlationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "eventType", domainEvent.eventType(),
                             "orderId", payload.orderId()
                     ))
@@ -285,7 +283,7 @@ public class PaymentEventConsumer {
                         "PAYMENT_FAILED Event ignoriert - Order bereits final",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "currentStatus", order.getStatus()
                         ))
@@ -302,7 +300,7 @@ public class PaymentEventConsumer {
                     "Order Status auf PAYMENT_FAILED gesetzt",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "status", order.getStatus()
                     ))
@@ -316,7 +314,7 @@ public class PaymentEventConsumer {
                     "Warehouse Reservation Rollback gestartet",
                     kv("correlationId", order.getCorrelationId()),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "reservationId",
                             order.getReservationId() != null
@@ -343,7 +341,7 @@ public class PaymentEventConsumer {
                         "Warehouse Reservation erfolgreich freigegeben",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "reservationId", order.getCorrelationId(),
                                 "status", response.status()
@@ -362,7 +360,7 @@ public class PaymentEventConsumer {
                                     : domainEvent.correlationId()
                     ),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId",
                             order != null
                                     ? order.getId()

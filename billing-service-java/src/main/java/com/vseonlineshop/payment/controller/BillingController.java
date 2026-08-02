@@ -4,7 +4,7 @@ import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentResponse;
 import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
 import com.vseonlineshop.payment.dto.refund.RefundResponseDto;
-import com.vseonlineshop.payment.service.PaymentService;
+import com.vseonlineshop.payment.service.BillingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -23,9 +23,9 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Payment Controller", description = "Endpunkte für Zahlungsabwicklung, Statusabfragen und Rückerstattungen")
-public class PaymentController {
+public class BillingController {
 
-    private final PaymentService paymentService;
+    private final BillingService billingService;
 
     @PostMapping("/pay")
     @Operation(
@@ -44,7 +44,7 @@ public class PaymentController {
             @Parameter(description = "Eindeutige Trace-ID für das verteilte Tracing", required = true)
             @RequestHeader("X-Correlation-Id") UUID correlationId) {
 
-        PaymentResponse response = paymentService.initiatePayment(request, correlationId);
+        PaymentResponse response = billingService.initiatePayment(request, correlationId);
         return ResponseEntity.accepted().body(response);
     }
 
@@ -61,7 +61,7 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> getPaymentStatus(
             @Parameter(description = "UUID der Correlation-ID", required = true)
             @PathVariable UUID correlationId) {
-        return ResponseEntity.ok(paymentService.getByCorrelationId(correlationId));
+        return ResponseEntity.ok(billingService.getByCorrelationId(correlationId));
     }
 
     @PostMapping("/refund")
@@ -81,7 +81,7 @@ public class PaymentController {
             @Parameter(description = "Eindeutige Trace-ID für das verteilte Tracing", required = true)
             @RequestHeader("X-Correlation-Id") UUID correlationId) {
 
-        String refundTransactionId = paymentService.processRefund(request, correlationId);
+        String refundTransactionId = billingService.processRefund(request, correlationId);
 
         return ResponseEntity.ok(new RefundResponseDto(
                 correlationId,
@@ -107,7 +107,7 @@ public class PaymentController {
 
         return ResponseEntity.ok(Map.of(
                 "transactionId", transactionId,
-                "status", paymentService.getStatus(transactionId, correlationId)
+                "status", billingService.getStatus(transactionId, correlationId)
         ));
     }
 }

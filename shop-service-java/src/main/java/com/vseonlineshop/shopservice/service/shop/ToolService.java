@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
@@ -41,7 +42,7 @@ public class ToolService {
                         "Order in DB erfolgreich aktualisiert",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "targetStatus", targetStatus
                         ))
@@ -51,7 +52,7 @@ public class ToolService {
                         "Order Status konnte nicht gespeichert werden",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "targetStatus", targetStatus,
                                 "errorMessage", dbEx.getMessage()
@@ -69,7 +70,7 @@ public class ToolService {
                         "Warehouse Reservation Rollback gestartet",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
-                        kv("context", Map.of(
+                        kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "reservationId", reservationOrderId,
                                 "operation", "RESERVATION_CANCEL"
@@ -112,7 +113,6 @@ public class ToolService {
             }
         }
 
-        // System-Alert NUR bei echten technischen Ausfällen/Stornierungen senden (nicht bei Fachlogik wie OUT_OF_STOCK)
         if (targetStatus != OrderStatus.OUT_OF_STOCK) {
             Map<String, String> metadata = Map.of(
                     "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
@@ -134,7 +134,7 @@ public class ToolService {
                     "Kein SystemAlert gesendet (fachlicher Fehler)",
                     kv("correlationId", order != null ? order.getCorrelationId().toString() : "Unknown"),
                     kv("service", "shop-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order != null ? order.getId().toString() : "Unknown",
                             "reason", "OUT_OF_STOCK"
                     ))
@@ -198,7 +198,6 @@ public class ToolService {
         try {
             publishAction.run();
         } catch (Exception e) {
-            // todo: Wie können wir damit umgehen, damit wir die Nachvollziehbarkeit nicht verlieren können : Transactional Outbox Pattern.
             log.error("Kafka Event konnte nicht gesendet werden",
                     kv("context", Map.of(
                             "errorMessage", e.getMessage()

@@ -15,8 +15,8 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
-import java.util.Map;
 
+import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
@@ -36,7 +36,8 @@ public class WarehouseClient {
     public ReservationResponse reserve(Order order) {
         log.info(
                 "Warehouse Request gestartet",
-                kv("context", Map.of(
+                kv("context", safeContext(
+                        "correlationId", order.getCorrelationId(),
                         "orderId", order.getId(),
                         "operation", "POST /reservations"
                 ))
@@ -52,7 +53,8 @@ public class WarehouseClient {
 
         log.info(
                 "Warehouse Commit Request gestartet",
-                kv("context", Map.of(
+                kv("context", safeContext(
+                        "correlationId", order.getCorrelationId(),
                         "orderId", order.getId(),
                         "operation", "POST /reservations/{id}/commit"
                 ))
@@ -75,7 +77,8 @@ public class WarehouseClient {
     private <T> T delete(Order order, Object... uriVars) {
         log.info(
                 "Warehouse Delete Request gestartet",
-                kv("context", Map.of(
+                kv("context", safeContext(
+                        "correlationId", order.getCorrelationId(),
                         "orderId", order.getId(),
                         "operation", "DELETE /reservations/{id}"
                 ))
@@ -97,7 +100,7 @@ public class WarehouseClient {
         } catch (ResourceAccessException | HttpServerErrorException ex) {
             log.error(
                     "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "errorMessage", ex.getMessage()
                     )),
@@ -107,7 +110,7 @@ public class WarehouseClient {
         } catch (RestClientException ex) {
             log.error(
                     "Warehouse Business/Client Fehler (kein Retry)",
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "errorMessage", ex.getMessage()
                     )),
@@ -141,7 +144,7 @@ public class WarehouseClient {
         } catch (ResourceAccessException | HttpServerErrorException ex) {
             log.error(
                     "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "errorMessage", ex.getMessage()
                     )),
@@ -151,7 +154,7 @@ public class WarehouseClient {
         } catch (RestClientException ex) {
             log.error(
                     "Warehouse Business/Client Fehler (kein Retry)",
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "orderId", order.getId(),
                             "errorMessage", ex.getMessage()
                     )),
