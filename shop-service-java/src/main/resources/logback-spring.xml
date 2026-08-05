@@ -1,18 +1,24 @@
 <configuration>
 
+    <!--
+        Nutzt die Spring-Property LOG_PATH oder den Umgebungsparameter LOG_PATH.
+        Fallback auf './logs' im Projektordner, wenn nichts angegeben ist (z.B. lokal in IntelliJ).
+    -->
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="./logs"/>
+
     <!-- =========================
          File Logging
          ========================= -->
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
 
-        <!-- Absoluter Pfad passend zum Docker-Volume -->
-        <file>/app/logs/shop-service.json</file>
+        <!-- Dynamischer Pfad basierend auf LOG_PATH -->
+        <file>${LOG_PATH}/shop-service.json</file>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
 
             <fileNamePattern>
-                /app/logs/shop-service.%d{yyyy-MM-dd}.json
+                ${LOG_PATH}/shop-service.%d{yyyy-MM-dd}.json
             </fileNamePattern>
 
             <!-- Genau 14 Tage Aufbewahrung -->
@@ -33,10 +39,10 @@
                 <!-- Logger Klasse -->
                 <loggerName/>
 
-                <!-- Service Name -->
-                <globalCustomFields>
+                <!-- Service Name (Korrektes Tag zur Vermeidung der Logback-Warnung) -->
+                <customFields>
                     {"service":"shop-service"}
-                </globalCustomFields>
+                </customFields>
 
                 <!-- Message -->
                 <message/>
@@ -65,9 +71,9 @@
                     <timeZone>UTC</timeZone>
                 </timestamp>
                 <logLevel/>
-                <globalCustomFields>
+                <customFields>
                     {"service":"shop-service"}
-                </globalCustomFields>
+                </customFields>
                 <message/>
                 <mdc/>
                 <arguments/>

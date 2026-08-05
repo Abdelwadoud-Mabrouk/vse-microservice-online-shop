@@ -3,6 +3,7 @@ package com.vseonlineshop.shopservice.service.client;
 
 import com.vseonlineshop.shopservice.domain.Order;
 import com.vseonlineshop.shopservice.dto.payment.*;
+import com.vseonlineshop.shopservice.exception.OrderNotFoundException;
 import com.vseonlineshop.shopservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 
 import java.util.Map;
+import java.util.Optional;
 
 
 @Service
@@ -25,10 +27,13 @@ public class BillingService {
     public PaymentResponse pay(Order order) {
 
 
-        Order fullOrder =
+        Optional<Order> optionalOrder =
                 orderRepository.findByIdWithItems(order.getId());
+        if (optionalOrder.isEmpty()) {
+            throw new OrderNotFoundException(order.getId());
+        }
 
-
+        Order fullOrder = optionalOrder.get();
         PaymentRequest request =
                 new PaymentRequest(
                         fullOrder.getId(),

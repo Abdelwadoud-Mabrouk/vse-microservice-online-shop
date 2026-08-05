@@ -6,9 +6,9 @@ import com.paypal.sdk.authentication.ClientCredentialsAuthModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.slf4j.event.Level;
-import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Configuration;
 
-@Service
+@Configuration
 public class PaypalConfig {
 
     @Value("${paypal.client.id}")
@@ -16,6 +16,17 @@ public class PaypalConfig {
 
     @Value("${paypal.client.secret}")
     private String PAYPAL_CLIENT_SECRET;
+
+    @Value("${paypal.environment:sandbox}")
+    private String paypalEnvironment;
+
+    @Value("${paypal.timeout:30}")
+    private long timeoutSeconds;
+
+    Environment environment =
+            "PRODUCTION".equalsIgnoreCase(paypalEnvironment)
+                    ? Environment.PRODUCTION
+                    : Environment.SANDBOX;
 
 
     @Bean
@@ -26,8 +37,8 @@ public class PaypalConfig {
                         .requestConfig(logConfigBuilder -> logConfigBuilder.body(true))
                         .responseConfig(logConfigBuilder -> logConfigBuilder.headers(true)))
                 .httpClientConfig(configBuilder -> configBuilder
-                        .timeout(0))
-                .environment(Environment.SANDBOX)
+                        .timeout(timeoutSeconds))
+                .environment(environment)
                 .clientCredentialsAuth(new ClientCredentialsAuthModel.Builder(
                                 PAYPAL_CLIENT_ID,
                                 PAYPAL_CLIENT_SECRET

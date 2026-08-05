@@ -2,6 +2,7 @@ package com.vseonlineshop.payment.controller;
 
 import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentResponse;
+import com.vseonlineshop.payment.dto.refund.RefundProviderResponse;
 import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
 import com.vseonlineshop.payment.dto.refund.RefundResponseDto;
 import com.vseonlineshop.payment.service.BillingService;
@@ -81,12 +82,12 @@ public class BillingController {
             @Parameter(description = "Eindeutige Trace-ID für das verteilte Tracing", required = true)
             @RequestHeader("X-Correlation-Id") UUID correlationId) {
 
-        String refundTransactionId = billingService.processRefund(request, correlationId);
+        RefundProviderResponse refundProviderResponse = billingService.processRefund(request, correlationId);
 
         return ResponseEntity.ok(new RefundResponseDto(
                 correlationId,
-                refundTransactionId,
-                "REFUND_SUCCEEDED"
+                refundProviderResponse.refundId(),
+                refundProviderResponse.paymentStatus().name()
         ));
     }
 
@@ -107,7 +108,7 @@ public class BillingController {
 
         return ResponseEntity.ok(Map.of(
                 "transactionId", transactionId,
-                "status", billingService.getStatus(transactionId, correlationId)
+                "status", billingService.getStatus(transactionId, correlationId).getStatus().name()
         ));
     }
 }

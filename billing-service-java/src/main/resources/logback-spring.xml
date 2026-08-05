@@ -1,122 +1,94 @@
 <configuration>
 
+    <!--
+        Nutzt die Spring-Property LOG_PATH oder den Umgebungsparameter LOG_PATH.
+        Fallback auf './logs' im Projektordner bei lokaler Ausführung in der IDE.
+    -->
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="./logs"/>
+
     <!-- =========================
          File Logging
          ========================= -->
 
-    <appender name="FILE"
-              class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
 
-        <file>logs/billing-service.json</file>
+        <!-- Dynamischer Pfad basierend auf LOG_PATH -->
+        <file>${LOG_PATH}/billing-service.json</file>
 
-        <rollingPolicy
-                class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
 
             <fileNamePattern>
-                logs/billing-service.%d{yyyy-MM-dd}.json
+                ${LOG_PATH}/billing-service.%d{yyyy-MM-dd}.json
             </fileNamePattern>
 
+            <!-- Genau 14 Tage Aufbewahrung -->
             <maxHistory>14</maxHistory>
 
         </rollingPolicy>
 
-
         <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-
             <providers>
-
                 <!-- ISO-8601 UTC Timestamp -->
                 <timestamp>
                     <timeZone>UTC</timeZone>
                 </timestamp>
 
-
                 <!-- Level INFO/WARN/ERROR -->
                 <logLevel/>
-
 
                 <!-- Logger Klasse -->
                 <loggerName/>
 
-
                 <!-- Service Name -->
-                <globalCustomFields>
+                <customFields>
                     {"service":"billing-service"}
-                </globalCustomFields>
-
+                </customFields>
 
                 <!-- Message -->
                 <message/>
 
-
                 <!-- MDC enthält correlationId -->
                 <mdc/>
-
 
                 <!-- kv() aus StructuredArguments -->
                 <arguments/>
 
                 <!-- Exception Stacktrace -->
                 <stackTrace/>
-
             </providers>
-
         </encoder>
 
     </appender>
-
-
 
     <!-- =========================
          Console Logging
          ========================= -->
 
-    <appender name="CONSOLE"
-              class="ch.qos.logback.core.ConsoleAppender">
-
-
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-
             <providers>
-
                 <timestamp>
                     <timeZone>UTC</timeZone>
                 </timestamp>
-
                 <logLevel/>
-
-                <globalCustomFields>
+                <customFields>
                     {"service":"billing-service"}
-                </globalCustomFields>
-
-
+                </customFields>
                 <message/>
-
                 <mdc/>
-
                 <arguments/>
-
                 <stackTrace/>
-
             </providers>
-
         </encoder>
-
     </appender>
-
-
 
     <!-- =========================
          Root Logger
          ========================= -->
 
     <root level="INFO">
-
         <appender-ref ref="CONSOLE"/>
-
         <appender-ref ref="FILE"/>
-
     </root>
-
 
 </configuration>

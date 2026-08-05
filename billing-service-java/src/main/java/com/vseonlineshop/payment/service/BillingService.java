@@ -1,6 +1,7 @@
 package com.vseonlineshop.payment.service;
 
 import com.vseonlineshop.payment.dto.*;
+import com.vseonlineshop.payment.dto.refund.RefundProviderResponse;
 import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,7 @@ public class BillingService {
         }
     }
 
-    public String processRefund(RefundRequestDto refundRequestDto, UUID correlationId) {
+    public RefundProviderResponse processRefund(RefundRequestDto refundRequestDto, UUID correlationId) {
         MDC.put(
                 "correlationId",
                 correlationId.toString()
@@ -71,7 +72,7 @@ public class BillingService {
         }
     }
 
-    public String getStatus(String transactionId, UUID correlationId) {
+    public PaymentStatusResponse getStatus(String transactionId, UUID correlationId) {
         MDC.put(
                 "correlationId",
                 correlationId.toString()

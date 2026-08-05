@@ -10,8 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface OrderRepository extends JpaRepository<Order, UUID> {
-    Optional<Order> findByCorrelationId(UUID correlationId);
+public interface  OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.items WHERE o.id = :id")
-    Order findByIdWithItems(@Param("id") UUID id);
+    Optional<Order> findByIdWithItems(@Param("id") UUID id);
 }

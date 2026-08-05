@@ -29,7 +29,7 @@ flowchart LR
     Intern["Admin und Lager"]
     Frontend["Angular-Frontend WohnWerk"]
     System["Möbel-Online-Shop"]
-    Provider["PayPal / Stripe / Test-Provider"]
+    Provider["PayPal / Stripe"]
     Grafana["Grafana"]
 
     Kunde --> Frontend
@@ -47,52 +47,70 @@ zuständigen Backend-Services.
 ## 3. Komponenten und Verantwortlichkeiten
 
 ```mermaid
-flowchart LR
-    UI["Angular 22 / Nginx"]
-    Shop["Shop-Service"]
-    Warehouse["Warehouse-Service"]
-    Billing["Billing-Service"]
-    Facade["Payment-Fassade"]
-    Provider["Zahlungsanbieter"]
-    Invoice["Invoice-Service"]
-    Audit["Audit-Service"]
-    Kafka[("Kafka")]
+flowchart TD
+    subgraph Frontend ["Frontend Layer"]
+        UI["Angular UI / Nginx"]
+    end
 
-    UI -->|REST| Shop
-    UI -->|REST| Warehouse
-    UI -->|REST| Invoice
-    UI -->|REST| Audit
+    subgraph Core ["Core Business Services"]
+        Shop["Shop-Service"]
+        Warehouse["Warehouse-Service"]
+        Billing["Billing-Service"]
+    end
 
-    Shop -->|REST| Warehouse
-    Shop -->|REST| Billing
-    Billing --> Facade
-    Facade --> Provider
+    subgraph Support ["Supporting Services"]
+        Invoice["Invoice-Service"]
+        Audit["Audit-Service"]
+    end
 
-    Shop --> Kafka
-    Billing --> Kafka
-    Warehouse --> Kafka
-    Invoice --> Kafka
-    Kafka --> Invoice
-    Kafka --> Audit
+    subgraph External ["External Infrastructure / Third Party"]
+        Facade["Payment-Fassade"]
+        Stubs["Zahlungsanbieter-Stubs<br/>(PayPal / Stripe Mocks)"]
+        Kafka[("Apache Kafka<br/>(Event Broker)")]
+    end
 
-    Shop --- ShopDb[("Shop DB")]
-    Billing --- BillingDb[("Billing DB")]
-    Warehouse --- WarehouseDb[("Warehouse DB")]
-    Invoice --- InvoiceStore[("Invoice Store")]
-    Audit --- AuditDb[("Audit DB")]
+    %% Frontend Connections
+    UI -->|"REST /api/v1/orders<br/>/api/v1/products"| Shop
+    UI -->|"REST /api/v1/warehouse"| Warehouse
+    UI -->|"REST /api/v1/invoices"| Invoice
+    UI -->|"REST /api/v1/audit"| Audit
+
+    %% Synchronous Service Communication
+    Shop -->|"REST POST /reservations"| Warehouse
+    Shop -->|"REST POST /pay (X-Correlation-Id)"| Billing
+    Billing -->|"SDK / REST"| Facade
+    Facade -->|"HTTPS / Mock API"| Stubs
+
+    %% Asynchronous Event Streams via Kafka (Publishing)
+    Shop -.->|"Publish: ORDER_CREATED,<br/>RESERVATION_ROLLBACK"| Kafka
+    Billing -.->|"Publish: PAYMENT_SUCCEEDED,<br/>PAYMENT_FAILED"| Kafka
+    Warehouse -.->|"Publish: STOCK_RESERVED,<br/>DISPATCH_FAILED"| Kafka
+    
+    %% Asynchronous Event Streams via Kafka (Consuming)
+    Kafka -.->|"Consume: PAYMENT_SUCCEEDED,<br/>PAYMENT_FAILED"| Shop
+    Kafka -.->|"Consume: PAYMENT_SUCCEEDED"| Invoice
+    Kafka -.->|"Consume: ALL EVENTS (*)"| Audit
+
+    %% Databases
+    Shop --- ShopDb[("PostgreSQL<br/>(Shop DB)")]
+    Billing --- BillingDb[("PostgreSQL<br/>(Billing DB)")]
+    Warehouse --- WarehouseDb[("PostgreSQL<br/>(Warehouse DB)")]
+    Invoice --- InvoiceStore[("(Invoice Store)")]
+    Audit --- AuditDb[("PostgreSQL<br/>(Audit DB)")]
 ```
+> 💡 **Tipp:** Falls das Diagramm nicht richtig gerendert wird, kopiere einfach den Mermaid-Code und füge ihn auf [mermaid.live](https://mermaid.live/) ein.
 
-| Komponente | Verantwortung |
-|---|---|
-| Shop-Service | Produkte, Bestellungen und Ablaufsteuerung |
-| Warehouse-Service | Bestand und Reservierungen |
-| Billing-Service | Zahlungen und Refunds |
-| Payment-Fassade | PayPal, Stripe und Test-Provider kapseln |
-| Invoice-Service | Rechnungen erstellen |
-| Audit-Service | Fachliche Historie speichern |
+| Komponente | Verantwortung | Wichtigste Schnittstellen                                                                              |
+|------------|---------------|--------------------------------------------------------------------------------------------------------|
+| **Shop-Service** | Bestellungen, Ablaufsteuerung (Saga) sowie Produktkatalog (Modular Monolith) | **REST:** `/api/v1/orders`, `/api/v1/products`<br>**Kafka:** Publishes `ORDER_*`, Consumes `PAYMENT_*` |
+| **Warehouse-Service** | Lagerbestand, Reservierungen und Versandvorbereitung | **REST:** `/api/v1/warehouse`<br>**Kafka:** Publishes `STOCK_*`                                        |
+| **Billing-Service** | Zahlungsabwicklung, Statusabfragen und Refunds | **REST:** `/pay`, `/refund`, `/{correlationId}`<br>**Kafka:** Publishes `PAYMENT_*`                    |
+| **Payment-Fassade** *(interne Komponente)* | Einheitliche Abstraktion der Zahlungsanbieter, Auswahl des aktiven Providers und Delegation an die passende `PaymentStrategy` | `PaymentStrategy`, PayPal API, Stripe API                                                              |
+| **Invoice-Service** | Erstellung und Archivierung von PDF-Rechnungen | **REST:** `/api/v1/invoices`<br>**Kafka:** Consumes  `PAYMENT_SUCCEDED`                                |
+| **Audit-Service** | Revisionssichere Speicherung aller fachlichen Ereignisse | **REST:** `/api/v1/audit`<br>**Kafka:** Consumes `*` (alle Events)                                     |
 
-Die Payment-Fassade hält den konkreten Zahlungsanbieter vom Shop fern. Ein
-neuer Provider verändert weder den Shop-Service noch dessen Bestell-API.
+Die Payment-Fassade hält den konkreten Zahlungsanbieter vom Shop-Service fern.
+Ein neuer Provider (z. B. Klarna) verändert weder den Shop-Service noch dessen Bestell-API, sondern erfordert lediglich eine neue Implementierung innerhalb der Fassade.
 
 ## 4. Kommunikationsmodell
 
@@ -116,9 +134,10 @@ Publisher muss diese Consumer nicht direkt aufrufen.
 
 Die Topics folgen den fachlichen Besitzern:
 
+
 | Topic | Ereignisse |
 |---|---|
-| `shop` | `ORDER_CREATED`, `ORDER_COMPLETED`, `ORDER_CANCELLED` |
+| `shop` | `ORDER_CREATED`, `ORDER_COMPLETED`, `ORDER_CANCELLED` , `STOCK_OUT`|
 | `billing` | `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED` |
 | `warehouse` | `WAREHOUSE_RESERVED`, `WAREHOUSE_COMMITTED`, `WAREHOUSE_CANCELLED` |
 | `invoice` | `INVOICE_CREATED`, `INVOICE_CREATION_FAILED` |
@@ -139,33 +158,124 @@ fordert gleichzeitig den Warehouse-Commit an. Erst nach
 
 ```mermaid
 sequenceDiagram
+    autonumber
     actor Kunde
-    participant Shop
-    participant Warehouse
-    participant Billing
-    participant Payment as Payment-Fassade
-    participant Kafka
-    participant Invoice
-    participant Audit
+    participant Angular
+    participant Shop as Shop Service (Orchestrator & Product Module)
+    participant WH as Warehouse Service
+    participant Billing as Billing Service
+    participant Audit as Audit Service
+    participant Invoice as Invoice Service
+    participant StripeExt as Stripe (Extern)
+    participant PaypalExt as PayPal (Extern)
 
-    Kunde->>Shop: Bestellung absenden
-    Shop-->>Kafka: ORDER_CREATED
-    Shop->>Warehouse: Bestand reservieren
-    Warehouse-->>Kafka: WAREHOUSE_RESERVED
-    Warehouse-->>Shop: Reservierung bestätigt
-    Shop->>Billing: Zahlung ausführen
-    Billing->>Payment: Provider aufrufen
-    Payment-->>Billing: Zahlung erfolgreich
-    Billing-->>Kafka: PAYMENT_SUCCEEDED
-    Kafka-->>Invoice: PAYMENT_SUCCEEDED
-    Invoice-->>Kafka: INVOICE_CREATED
-    Shop->>Warehouse: Reservierung committen
-    Warehouse-->>Kafka: WAREHOUSE_COMMITTED
-    Warehouse-->>Shop: Commit bestätigt
-    Shop-->>Kafka: ORDER_COMPLETED
-    Kafka-->>Audit: Fachliche Ereignisse
-    Shop-->>Kunde: Bestellung abgeschlossen
+    %% PHASE 1: BROWSING
+    rect rgb(240, 248, 255)
+        Note over Kunde, Shop: Phase 1: Browsing & Produkt-Auswahl
+        Kunde->>Angular: Öffnet App & filtert Produkte
+        Angular->>Shop: GET /products (findAll, filter) [REST]
+        Shop-->>Angular: Produktliste (Name, SKU, Preis...)
+    end
+
+    %% PHASE 2: CHECKOUT & VALIDIERUNG
+    rect rgb(255, 245, 230)
+        Note over Kunde, Audit: Phase 2: Checkout & Order-Vorbereitung (Correlation-ID startet)
+        Kunde->>Angular: Klickt "Checkout" Button
+        Angular->>Shop: POST /checkout (productId, sku, price, customerInfo, address, provider) [REST]
+        
+        Note over Shop: Validiert Preis/SKU intern im Product-Modul
+        Note over Shop: Generiert eindeutige Correlation-ID
+        
+        Shop-->>Kafka: Topic: Order | Event: ORDER_CREATED (Correlation-ID)
+        Audit-->>Kafka: Consumed ORDER_CREATED
+        Note over Audit: Speichert Event in Audit DB
+    end
+
+    %% PHASE 3: WAREHOUSE RESERVIERUNG
+    rect rgb(230, 255, 230)
+        Note over Shop, Audit: Phase 3: Bestandsprüfung & Reservierung
+        Shop->>WH: POST /reservieren (productId, sku, menge) [REST]
+        WH-->>Shop: HTTP 200 OK (Menge reicht aus, reserviert)
+        
+        Shop-->>Kafka: Topic: Order | Event: ORDER_PROCESSING (Correlation-ID)
+        Audit-->>Kafka: Consumed ORDER_PROCESSING
+        Note over Audit: Speichert Event in Audit DB
+    end
+
+    %% PHASE 4: ZAHLUNGS-INITIALISIERUNG & PENDING STATUS
+    rect rgb(245, 230, 255)
+        Note over Shop, Kunde: Phase 4: Billing-Initialisierung & Provider-Handshake
+        Shop->>Billing: POST /payments (orderId, correlationId, price, provider) [REST]
+        
+        Billing-->>Kafka: Topic: Billing | Event: PAYMENT_INITIALIZED
+        Audit-->>Kafka: Consumed PAYMENT_INITIALIZED
+        
+        Note over Billing: Interface Pattern greift:<br/>Wählt Provider (PayPal/Stripe)
+        
+        Billing->>PaypalExt: API-Call: Erstelle Zahlung / Session
+        PaypalExt-->>Billing: JSON Response + Redirect-URL (Approve-URL / Token)
+        
+        Note over Billing: Speichert JSON in Entity 'payment'<br/>& 'payment_transaction' (mit Token/TxnId)
+        
+        Billing-->>Kafka: Topic: Billing | Event: PAYMENT_PENDING
+        Audit-->>Kafka: Consumed PAYMENT_PENDING
+        Note over Audit: Speichert PENDING Status in Audit DB
+        
+        Billing-->>Shop: Gibt Redirect-URL & Daten zurück [REST]
+        Shop-->>Angular: Reicht Redirect-URL an Frontend weiter [REST]
+        Angular->>Kunde: Leitet Kunde weiter zur Zahlungsseite (Stripe/PayPal)
+        Kunde->>PaypalExt: Autorisiert Zahlung / Bezahlt
+    end
+
+    %% PHASE 5: ABSCHLUSS & WEBHOOK HANDLING (STRIPE VS PAYPAL)
+    rect rgb(230, 245, 245)
+        Note over Kunde, Invoice: Phase 5: Webhook-Handling & Asynchroner Abschluss
+        
+        alt STRIPE-FLOW: Direktes Webhook-Event nach Zahlung
+            StripeExt-->>Billing: POST /webhooks/stripe (Zahlung erfolgreich) [Webhook / Async]
+            
+        else PAYPAL-FLOW: Erfordert manuelles Capture, um Webhook auszulösen
+            Kunde->>Angular: Wird zurückgeleitet mit ?token=XXXX
+            Angular->>Shop: POST /checkout/paypal/capture/{token} [REST]
+            Shop->>Billing: POST /capture/{token} [REST (Intern)]
+            
+            Billing->>PaypalExt: POST /v2/checkout/orders/{token}/capture [REST]
+            PaypalExt-->>Billing: HTTP 200 OK (Geld erfolgreich eingezogen)
+            
+            Billing-->>Kafka: Topic: Billing | Event: PAYMENT_PAYPAL_CAPTURED
+            Audit-->>Kafka: Consumed PAYMENT_PAYPAL_CAPTURED
+            Note over Audit: Speichert CAPTURED-Status in Audit DB
+            
+            Billing-->>Shop: HTTP 200 OK (Capture angestoßen) [REST]
+            Shop-->>Angular: HTTP 200 OK (Bestätigung empfangen) [REST]
+            
+            Note over PaypalExt: Erst jetzt feuert PayPal den Webhook!
+            PaypalExt-->>Billing: POST /webhooks/paypal (Zahlung erfolgreich) [Webhook / Async]
+        end
+        
+        Note over Billing: WebhookController verarbeitet das Event,<br/>ändert DB-Zahlungsstatus auf COMPLETED
+        
+        Billing-->>Kafka: Topic: Billing | Event: PAYMENT_SUCCEEDED
+        
+        par Parallel verarbeitet (Event-Driven) direkt nach PAYMENT_SUCCEEDED
+            Shop-->>Kafka: Consumed PAYMENT_SUCCEEDED
+            Note over Shop: Ändert DB-Status auf ORDER_COMPLETED
+            Shop-->>Kafka: Topic: Order | Event: ORDER_COMPLETED
+        and
+            Invoice-->>Kafka: Consumed PAYMENT_SUCCEEDED
+            Note over Invoice: Erstellt direkt PDF-Rechnung nach Zahlungserfolg
+        and
+            Audit-->>Kafka: Consumed PAYMENT_SUCCEEDED
+            Note over Audit: Speichert PAYMENT_SUCCEEDED in Audit DB
+        end
+        
+        Audit-->>Kafka: Consumed ORDER_COMPLETED
+        Note over Audit: Speichert finales Event ORDER_COMPLETED in Audit DB
+        
+        Angular->>Kunde: Zeigt finale Erfolgsseite an ("Danke für deine Bestellung!")
+    end
 ```
+> 💡 **Tipp:** Falls das Diagramm nicht richtig gerendert wird, kopiere einfach den Mermaid-Code und füge ihn auf [mermaid.live](https://mermaid.live/) ein.
 
 Der Happy Path besitzt eine feste Reihenfolge:
 
@@ -182,11 +292,130 @@ Der Happy Path besitzt eine feste Reihenfolge:
 Warehouse lehnt die Reservierung ab. Der Shop beendet den Vorgang, bevor
 Billing eine Zahlung startet.
 
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Kunde
+    participant Angular
+    participant Shop as Shop Service (Orchestrator & Product Module)
+    participant WH as Warehouse Service
+    participant Billing as Billing Service
+    participant Audit as Audit Service
+    participant Invoice as Invoice Service
+    participant PaymentProvider as Payment Provider (Abstract / Stub)
+
+    %% PHASE 1: BROWSING
+    rect rgb(240, 248, 255)
+        Note over Kunde, Shop: Phase 1: Browsing & Produkt-Auswahl
+        Kunde->>Angular: Öffnet App & filtert Produkte
+        Angular->>Shop: GET /products (findAll, filter) [REST]
+        Shop-->>Angular: Produktliste (Name, SKU, Preis...)
+    end
+
+    %% PHASE 2: CHECKOUT & VALIDIERUNG
+    rect rgb(255, 245, 230)
+        Note over Kunde, Audit: Phase 2: Checkout & Order-Vorbereitung (Correlation-ID startet)
+        Kunde->>Angular: Klickt "Checkout" Button
+        Angular->>Shop: POST /checkout (productId, sku, price, customerInfo, address) [REST]
+        
+        Note over Shop: Validiert Preis/SKU intern im Product-Modul
+        Note over Shop: Generiert eindeutige Correlation-ID
+        
+        Shop-->>Kafka: Topic: Order | Event: ORDER_CREATED (Correlation-ID)
+        Audit-->>Kafka: Consumed ORDER_CREATED
+        Note over Audit: Speichert Event in Audit DB
+    end
+
+    %% PHASE 3: WAREHOUSE RESERVIERUNG & FEHLERHANDLING (KEIN BESTAND)
+    rect rgb(255, 230, 230)
+        Note over Shop, Kunde: Phase 3: Bestandsprüfung fehlerhaft (Kein Bestand)
+        Shop->>WH: POST /reservieren (productId, sku, menge) [REST]
+        
+        WH-->>Shop: HTTP 409 Conflict (Bestand ist leer für dieses Item)
+        
+        Note over Shop: Bricht Bestellprozess sofort ab<br/>(Keine Interaktion mit Billing!)
+        
+        Shop-->>Kafka: Topic: Order | Event: OUT_OF_STOCK (Correlation-ID)
+        
+        Audit-->>Kafka: Consumed OUT_OF_STOCK
+        Note over Audit: Speichert OUT_OF_STOCK Event in Audit DB
+        
+        Shop-->>Angular: HTTP 409 Conflict ("Zurzeit ist der Bestand für dieses Item leer.") [REST]
+        Angular->>Kunde: Zeigt Fehlermeldung: "Zurzeit ist der Bestand für dieses Item leer."
+    end
+```
+> 💡 **Tipp:** Falls das Diagramm nicht richtig gerendert wird, kopiere einfach den Mermaid-Code und füge ihn auf [mermaid.live](https://mermaid.live/) ein.
+
 ### Zahlung fehlgeschlagen
 
 Billing veröffentlicht `PAYMENT_FAILED`. Der Shop storniert die Reservierung.
 Warehouse gibt den Bestand frei und veröffentlicht `WAREHOUSE_CANCELLED`. Der
 Shop meldet anschließend `ORDER_CANCELLED`.
+
+```mermaid
+
+sequenceDiagram
+    autonumber
+    actor Kunde
+    participant Angular
+    participant Shop as Shop Service (Orchestrator)
+    participant WH as Warehouse Service
+    participant Billing as Billing Service
+    participant Audit as Audit Service
+    participant Provider as Payment Provider (Abstract / Stub)
+
+    %% VORBEDINGUNG & ZAHLUNGS-INITIALISIERUNG
+    rect rgb(240, 248, 255)
+        Note over Kunde, Billing: Schritt 1: Checkout & Billing-Initiierung (Bestand bereits reserviert)
+        Shop->>Billing: POST /payments (orderId, correlationId, price) [REST]
+        Billing->>Provider: API-Call: Zahlungssession erstellen
+        Provider-->>Billing: Redirect-URL
+        Billing-->>Shop: Redirect-URL [REST]
+        Shop-->>Angular: Redirect-URL [REST]
+    end
+
+    %% FEHLER AUF SEITEN DES PROVIDERS
+    rect rgb(255, 230, 230)
+        Note over Kunde, Provider: Schritt 2: Fehlgeschlagener Zahlungsversuch beim Anbieter
+        Angular->>Kunde: Leitet weiter zur Zahlungsseite
+        Kunde->>Provider: Führt Zahlung aus (z. B. Karte abgelaufen / Guthaben unzureichend)
+        Provider-->>Kunde: Direktes Feedback: "Zahlung fehlgeschlagen / Ablehnung"
+    end
+
+    %% BACKEND-WEBHOOK & EVENT-COMPENSATION
+    rect rgb(255, 240, 245)
+        Note over Provider, Audit: Schritt 3-6: Asynchrones Webhook-Handling & Kompensationsablauf
+        
+        %% 3. Webhook zu Billing & PAYMENT_FAILED
+        Note over Provider, Billing: Schritt 3: Provider sendet Failure-Notification
+        Provider-->>Billing: POST /webhooks (Event: PAYMENT_FAILED) [Webhook / Async]
+        Note over Billing: Aktualisiert Zahlungsstatus in DB auf FAILED
+        
+        Billing-->>Kafka: Topic: Billing | Event: PAYMENT_FAILED (Correlation-ID)
+        Audit-->>Kafka: Consumed PAYMENT_FAILED
+        Note over Audit: Speichert PAYMENT_FAILED in Audit DB
+        
+        %% 4. Shop consumed & ORDER_FAILED
+        Note over Shop: Schritt 4: Shop verarbeitet Fehlgeschlagene Zahlung
+        Shop-->>Kafka: Consumed PAYMENT_FAILED
+        Note over Shop: Aktualisiert Order-Status in DB auf ORDER_CANCELLED
+        
+        Shop-->>Kafka: Topic: Order | Event: ORDER_CANCELLED (Correlation-ID)
+        Audit-->>Kafka: Consumed ORDER_CANCELLED
+        Note over Audit: Speichert ORDER_CANCELLED in Audit DB
+        
+        %% 5. Warehouse consumed & Rollback
+        Note over WH: Schritt 5: Warehouse gibt reservierten Bestand frei
+        WH-->>Kafka: Consumed ORDER_CANCELLED
+        Note over WH: Rollback: Storniert Reservierung & gibt Items frei
+        
+        WH-->>Kafka: Topic: Warehouse | Event: RESERVATION_ROLLBACK_COMPLETED
+        Audit-->>Kafka: Consumed RESERVATION_ROLLBACK_COMPLETED
+        Note over Audit: Speichert RESERVATION_ROLLBACK in Audit DB
+    end
+```
+> 💡 **Tipp:** Falls das Diagramm nicht richtig gerendert wird, kopiere einfach den Mermaid-Code und füge ihn auf [mermaid.live](https://mermaid.live/) ein.
 
 ### Commit fehlgeschlagen
 
@@ -196,26 +425,62 @@ buchen. Der Shop fordert über Billing einen Refund an und veröffentlicht kein
 
 ```mermaid
 sequenceDiagram
-    participant Shop
-    participant Warehouse
-    participant Billing
-    participant Provider as Zahlungsanbieter
-    participant Audit
+    autonumber
+    actor Kunde
+    participant Angular
+    participant Shop as Shop Service (Orchestrator)
+    participant WH as Warehouse Service
+    participant Billing as Billing Service
+    participant Audit as Audit Service
+    participant Provider as Payment Provider (Abstract / Stub)
 
-    Shop->>Warehouse: Reservierung committen
-    Warehouse-->>Shop: Commit fehlgeschlagen
-    Shop->>Billing: Refund anfordern
-    Billing->>Provider: Zahlung zurückerstatten
-    Provider-->>Billing: Refund bestätigt
-    Billing-->>Audit: Refund dokumentieren
-    Shop-->>Audit: Fehler dokumentieren
+%% VORBEDINGUNG
+    rect rgb(240, 248, 255)
+        Note over Shop, Billing: Vorbedingung: PAYMENT_SUCCEEDED wurde verarbeitet
+        Billing-->>Kafka: Topic: Billing | Event: PAYMENT_SUCCEEDED (Correlation-ID)
+        Shop-->>Kafka: Consumed PAYMENT_SUCCEEDED
+    end
+
+%% FEHLER BEIM WAREHOUSE COMMIT
+    rect rgb(255, 230, 230)
+        Note over Shop, WH: Schritt 1: Versuch den Bestand final zu committen
+        Shop->>WH: POST /commit (orderId, correlationId) [REST]
+
+        Note over Shop: Timeout / Service Unavailable (Nach mehreren Retries)
+        WH-->>Shop: HTTP 503 Service Unavailable / Connection Refused
+
+        Note over Shop: Commit fehlgeschlagen! Initiere Kompensation (Refund)
+    end
+
+%% REFUND ANFORDERN & AUSFÜHREN
+    rect rgb(255, 240, 245)
+        Note over Shop, Provider: Schritt 2: Synchroner Refund-Aufruf über Billing API
+        Shop->>Billing: POST /refund (orderId, reason, amount) [REST mit X-Correlation-Id]
+
+        Billing->>Provider: API-Call: Refund / Rückerstattung ausführen
+        Provider-->>Billing: HTTP 200 OK (Refund erfolgreich verarbeitet)
+
+        Billing-->>Shop: HTTP 200 OK (RefundResponseDto: REFUND_SUCCEEDED) [REST]
+
+        Billing-->>Kafka: Topic: Billing | Event: REFUND_PROCESSED (Correlation-ID)
+        Audit-->>Kafka: Consumed REFUND_PROCESSED
+        Note over Audit: Speichert REFUND_PROCESSED in Audit DB
+    end
+
+%% COMPENSATING ORDER ROLLBACK (REIN BACKEND-BASIERT)
+    rect rgb(230, 230, 250)
+        Note over Shop, Audit: Schritt 3: Backend-seitiges Order Rollback & Auditierung
+        Note over Shop: Aktualisiert Order-Status in DB auf ROLLBACK_COMPLETED.
+
+        Shop-->>Kafka: Topic: Order | Event: ROLLBACK_COMPLETED (Correlation-ID)
+
+        Audit-->>Kafka: Consumed ROLLBACK_COMPLETED.
+        Note over Audit: Speichert ROLLBACK_COMPLETED in Audit DB
+
+        Note over Kafka: (Zukünftig: Notification-Service konsumiert Event & sendet E-Mail/Push an Kunde)
+    end
 ```
-
-### Rechnung fehlgeschlagen
-
-Invoice versucht die Erstellung erneut und meldet bei anhaltendem Fehler
-`INVOICE_CREATION_FAILED`. Ein Rechnungsfehler löst keinen Refund aus.
-
+> 💡 **Tipp:** Falls das Diagramm nicht richtig gerendert wird, kopiere einfach den Mermaid-Code und füge ihn auf [mermaid.live](https://mermaid.live/) ein.
 ## 7. Event-Verträge
 
 Alle Ereignisse verwenden einen gemeinsamen Envelope:
@@ -312,6 +577,27 @@ und Refund verwenden denselben Zugang.
 Fachliche Schlüssel schützen Reservierung, Zustandswechsel, Rechnung und Audit.
 Dadurch bleiben Retries und doppelte Nachrichten beherrschbar.
 
+### ADR 7: Synchrone Bezahl-Initiierung per REST
+
+Der Checkout-Prozess nutzt synchrone REST-Kommunikation zwischen Shop und Billing, um dem Kunden im Frontend (Angular) sofort die `approvalUrl` für den Zahlungs-Redirect zurückzugeben.
+Da Gast-User keine Zahlungsdaten wie eine IBAN hinterlegt haben, ist eine sofortige Weiterleitung zwingend erforderlich. Ein asynchrones Event über Kafka würde hier unnötiges Polling und Komplexität im Frontend erzeugen. Die anschließende Zahlungsbestätigung erfolgt hingegen entkoppelt über Kafka.
+
+### ADR 8: Entkoppeltes Frontend ohne Polling oder WebSockets
+
+Nach Weiterleitung auf die externe Zahlungsseite zeigt das Frontend sofort eine statische Bestätigungsseite ("Danke für deine Bestellung"), anstatt den Status per Polling oder WebSockets abzufragen.
+Die gesamte weitere Verarbeitung – wie Zahlungsprüfung, Statusupdates und der E-Mail-Versand – erfolgt vollständig entkoppelt im Backend gesteuert über Kafka.
+Dies verhindert unnötige Serverlast im Frontend, vermeidet komplexe Socket-Verbindungen und hält die User Experience extrem schlank.
+
+### ADR 9: Modulare Bündelung des Produkt-Grenzkontexts
+
+Der Produkt-Katalog bildet nach DDD einen eigenen Bounded Context (Source of Truth), wird in der Startup-Phase jedoch als isoliertes Package im Shop-Service betrieben.
+Dies spart Betriebskosten, Netzwerk-Latenzen und Betriebskomplexität bei überschaubarer Produktanzahl. Durch die strikte Trennung von Controller,
+Service und Repository auf Code-Ebene kann das Modul bei steigender Last jederzeit als eigener Microservice ausgelagert werden.
+
+
+### ADR 10: Wahl von Stripe und PayPal als primäre Payment-Adapter
+
+Die Payment-Fassade benötigt mindestens zwei konkrete Provider-Adapter, um das Adapter-Pattern und die Konfigurierbarkeit sinnvoll zu demonstrieren. Gewählt wurden Stripe und PayPal, da beide weltweit zu den am weitesten verbreiteten und ausgereiftesten Payment-Service-Providern zählen und zugleich unterschiedliche Integrationsmuster abbilden (direkte API-Anbindung bei Stripe vs. Redirect-basierter Checkout-Flow bei PayPal). Klarna wurde bewusst nicht als gleichrangiger Adapter modelliert, da es primär ein BNPL-Anbieter ist und selbst häufig über PSPs wie Stripe angebunden wird, statt eine eigenständige, global vergleichbare Zahlungsinfrastruktur bereitzustellen. Durch die strikte Kapselung hinter der Fassade und das Open/Closed Principle kann ein KlarnaAdapter oder jeder weitere Anbieter jederzeit ergänzt werden, ohne bestehenden Code zu verändern.
 ## Fazit
 
 Die Architektur trennt fachliche Verantwortlichkeiten klar voneinander und verbindet synchrone Entscheidungen mit ereignisbasierter Kommunikation. Durch Database per Service, stabile Event-Verträge und idempotente Verarbeitung bleibt das System nachvollziehbar und erweiterbar. Die praktische Umsetzung sowie die Testergebnisse werden im Abschlussbericht beschrieben.
