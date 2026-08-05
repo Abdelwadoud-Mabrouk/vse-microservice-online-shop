@@ -34,7 +34,7 @@ public class OrderApplicationService {
     private final WarehouseClient warehouseClient;
     private final BillingService paymentClient;
     private final KafkaEventPublisher kafkaEventPublisher;
-    private final ToolService toolService;
+    private final OrderServiceTool toolService;
 
 
 
@@ -67,8 +67,7 @@ public class OrderApplicationService {
                     kv("context", safeContext(
                             "errorCode", "CREATION_ORDER_FAILED",
                             "errorMessage", ex.getMessage()
-                    ))
-                    , ex);
+                    )));
             toolService.cancelOrder(null, null, OrderStatus.CANCELLED, "CREATION_ORDER_FAILED", ex);
             throw new GlobalException("DATABASE_ERROR", "Bestellung konnte nicht angelegt werden.");
         }
@@ -79,7 +78,7 @@ public class OrderApplicationService {
             // Warehouse reservieren
             try {
                 reservation = warehouseClient.reserve(order);
-            } catch (HttpClientErrorException ex) {
+            } catch (WarehouseServiceException ex) {
                 // 4xx Fehler
                 log.warn(
                         "Bestand reicht nicht fuer Order",
@@ -87,7 +86,6 @@ public class OrderApplicationService {
                         kv("service", "shop-service"),
                         kv("context", safeContext(
                                 "orderId", order.getId(),
-                                "httpStatus", ex.getStatusCode().value(),
                                 "errorMessage", ex.getMessage()
                         ))
                 );
@@ -108,8 +106,7 @@ public class OrderApplicationService {
                         kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "errorMessage", errorMessage != null ? errorMessage : "Verbindung fehlgeschlagen (Connection refused/Timeout)"
-                        )),
-                        ex
+                        ))
                 );
 
                 toolService.cancelOrder(order, null, OrderStatus.CANCELLED, "WAREHOUSE_SERVICE_UNAVAILABLE", ex);
@@ -165,8 +162,7 @@ public class OrderApplicationService {
                                 "orderId", order.getId(),
                                 "status", order.getStatus(),
                                 "errorMessage", ex.getMessage()
-                        )),
-                        ex
+                        ))
                 );
 
                 // Rollback durchführen (Lager freigeben)
@@ -248,8 +244,7 @@ public class OrderApplicationService {
                             "orderId", order.getId(),
                             "status", order.getStatus(),
                             "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
 
 
@@ -278,8 +273,10 @@ public class OrderApplicationService {
 
 
     public OrderDetailsResponse getOrder(UUID orderId) {
-        Order order = orderRepository.findById(orderId)
+
+        Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+
         return toolService.toResponse(order);
     }
 

@@ -8,12 +8,13 @@ import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.exception.GlobalException;
 import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
-import com.vseonlineshop.payment.webhook.HelpTool;
+import com.vseonlineshop.payment.webhook.tool.WebhookSupport;
 import com.vseonlineshop.payment.webhook.WebhookHandler;
 import com.vseonlineshop.payment.webhook.exception.WebhookProcessingException;
 import com.vseonlineshop.payment.webhook.exception.WebhookSignatureException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -22,13 +23,16 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Instant;
 import java.util.Map;
 
+import static com.vseonlineshop.payment.config.LogUtils.safeContext;
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Service
 @RequiredArgsConstructor
 @Log4j2
 public class PaypalWebhookHandler implements WebhookHandler {
 
 
-    private final HelpTool helpTool;
+    private final WebhookSupport webhookSupport;
     private final KafkaEventPublisher kafkaEventPublisher;
     private final PaypalTokenService paypalTokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -48,7 +52,24 @@ public class PaypalWebhookHandler implements WebhookHandler {
 
     @Override
     public void handle(String payload, Map<String, String> mapHeaders) {
+
+        long start = System.currentTimeMillis();
+        boolean processingSuccessful = false;
+
+        MDC.put(
+                "correlationId",
+                "pending"
+        );
         try {
+
+            log.info(
+                    "Paypal Webhook Verarbeitung gestartet",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "Paypal"
+                    ))
+            );
+
             String accessToken = paypalTokenService.getValidAccessToken();
 
             // 2. Verifizierungs-Body bauen
@@ -87,11 +108,26 @@ public class PaypalWebhookHandler implements WebhookHandler {
 
             JsonNode responseBody = objectMapper.readTree(response.getBody());
             if (responseBody == null || !"SUCCESS".equalsIgnoreCase(responseBody.get("verification_status").asText())) {
-                log.warn("[PAYPAL/WEBHOOK] Signaturprüfung FEHLGESCHLAGEN!");
+                log.warn(
+                        "Paypal Webhook Signatur ungültig",
+                        kv("service", "billing-service"),
+                        kv("context", safeContext(
+                                "provider", "paypal",
+                                "verificationStatus", "FAILED"
+                        ))
+                );
                 throw new WebhookSignatureException("Ungültige Signatur");
             }
 
-            log.info("[PAYPAL/WEBHOOK] Signatur ERFOLGREICH verifiziert!");
+            log.info(
+                    "Paypal Webhook Signatur erfolgreich verifiziert",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "paypal",
+                            "transmissionId", transmissionId,
+                            "verificationStatus", "SUCCESS"
+                    ))
+            );
 
             JsonNode webhookEvent;
             String eventType;
@@ -107,7 +143,18 @@ public class PaypalWebhookHandler implements WebhookHandler {
                 }
 
             } catch (JsonProcessingException e) {
-                throw new WebhookProcessingException("Fehler beim JSON der Verifizierung");
+                log.error(
+                        "Paypal Webhook JSON Parsing fehlgeschlagen",
+                        kv("service", "billing-service"),
+                        kv("context", safeContext(
+                                "provider", "paypal"
+                        )),
+                        e
+                );
+
+                throw new WebhookProcessingException(
+                        "Paypal Payload konnte nicht gelesen werden"
+                );
             }
 
             String checkoutSessionId = "UNKNOWN";
@@ -120,36 +167,111 @@ public class PaypalWebhookHandler implements WebhookHandler {
 
             String captureId = resource.has("id") ? resource.get("id").asText() : checkoutSessionId;
 
-            log.info("[PAYPAL/WEBHOOK] Empfangene IDs -> Order-ID: {}, Capture-ID: {}", checkoutSessionId, captureId);
+            log.info(
+                    "Paypal Transaktionsdaten extrahiert",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "paypal",
+                            "providerTransactionId", checkoutSessionId,
+                            "captureId", captureId
+                    ))
+            );
             // Die verkettete custom_id aus dem JSON holen und in einheitliches Metadata-Objekt mappen
             String customIdRaw = resource.has("custom_id") ? resource.get("custom_id").asText() : "";
-            WebHookMetadata metadata = helpTool.getMetadata(customIdRaw, eventType, checkoutSessionId);
+            WebHookMetadata metadata = webhookSupport.getMetadata(customIdRaw, eventType, checkoutSessionId);
+            MDC.put(
+                    "correlationId",
+                    metadata.correlationId() != null
+                            ? metadata.correlationId()
+                            : "unknown"
+            );
 
-            // Validierung der Pflichtfelder
-            helpTool.validateRequiredFields(metadata, checkoutSessionId);
+            log.debug(
+                    "Paypal Webhook Metadaten extrahiert",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "Paypal",
+                            "paymentId", metadata.paymentIdRaw(),
+                            "orderId", metadata.orderId()
+                    ))
+            );
+
+            webhookSupport.validateRequiredFields(metadata, checkoutSessionId);
+
 
             // Laden und Konsistenzprüfung des Payments gegen die DB
-            Payment payment = helpTool.loadAndVerifyPayment(metadata);
+            Payment payment = webhookSupport.loadAndVerifyPayment(metadata);
+
+            log.debug(
+                    "Paypal Payment erfolgreich validiert",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "paypal",
+                            "paymentId", payment.getPaymentId(),
+                            "orderId", payment.getOrderId()
+                    ))
+            );
+
 
             // Idempotenz-Prüfung
             if (payment.getStatus() == PaymentStatus.CONFIRMED || payment.getStatus() == PaymentStatus.FAILED) {
-                log.warn("[WEBHOOK/PAYPAL] Bereits verarbeitet paymentId={} status={}", metadata.paymentIdRaw(), payment.getStatus());
-                helpTool.safePublish(() -> kafkaEventPublisher.publishWebhookDuplicateIgnored(payment));
+                log.warn(
+                        "Paypal bereits verarbeitet (Idempotenzprüfung)",
+                        kv("service", "billing-service"),
+                        kv("context", safeContext(
+                                "provider", "Paypal",
+                                "paymentId", metadata.paymentIdRaw(),
+                                "status", payment.getStatus()
+                        ))
+                );
+                webhookSupport.safePublish(() -> kafkaEventPublisher.publishWebhookDuplicateIgnored(payment));
                 return;
             }
 
             // Routing des Event-Typs
             switch (eventType) {
-                case "PAYMENT.CAPTURE.COMPLETED" ->
-                        helpTool.handleSuccess(payment, checkoutSessionId,captureId, payload, Instant.now());
+                case "PAYMENT.CAPTURE.COMPLETED" -> {
+                    webhookSupport.handleSuccess(payment, checkoutSessionId, captureId, payload, Instant.now());
+                    processingSuccessful = true;
+                    log.info(
+                            "Paypal Zahlung erfolgreich verarbeitet",
+                            kv("service", "billing-service"),
+                            kv("context", safeContext(
+                                    "provider", "Paypal",
+                                    "paymentId", payment.getPaymentId(),
+                                    "transactionId", checkoutSessionId,
+                                    "status", "CONFIRMED"
+                            ))
+                    );
+                }
                 case "PAYMENT.CAPTURE.DENIED" -> {
                     String dynamischerFehlergrund = "PayPal-Zahlung abgelehnt";
                     if (resource.has("status_details") && resource.get("status_details").has("reason")) {
                         dynamischerFehlergrund = resource.get("status_details").get("reason").asText();
                     }
-                    helpTool.handleFailure(payment, checkoutSessionId, dynamischerFehlergrund, payload, Instant.now());
+                    webhookSupport.handleFailure(payment, checkoutSessionId, dynamischerFehlergrund, payload, Instant.now());
+                    processingSuccessful = true;
+                    log.warn(
+                            "Paypal Zahlung fehlgeschlagen",
+                            kv("service", "billing-service"),
+                            kv("context", safeContext(
+                                    "provider", "paypal",
+                                    "paymentId", payment.getPaymentId(),
+                                    "errorMessage", dynamischerFehlergrund
+                            ))
+                    );
                 }
-                default -> helpTool.handleInformativeEvent(payment, checkoutSessionId,null, eventType, payload);
+                default -> {
+                    log.info(
+                            "Paypal Informations-Event verarbeitet",
+                            kv("service", "billing-service"),
+                            kv("context", safeContext(
+                                    "provider", "Paypal",
+                                    "paymentId", payment.getPaymentId()
+                            ))
+                    );
+                    webhookSupport.handleInformativeEvent(payment, checkoutSessionId, null, eventType, payload);
+                }
             }
 
 
@@ -157,9 +279,29 @@ public class PaypalWebhookHandler implements WebhookHandler {
             throw e;
 
         } catch (Exception e) {
-            log.error("[WEBHOOK/STRIPE] Unerwarteter Fehler", e);
-            helpTool.systemAlarm();
+            log.error(
+                    "Unerwarteter Fehler bei der Paypal Webhook Verarbeitung",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "Paypal",
+                            "errorType", e.getClass().getSimpleName(),
+                            "errorMessage", e.getMessage()
+                    )),
+                    e
+            );
+            webhookSupport.systemAlarm();
             throw new GlobalException("Internal Server Error");
+        } finally {
+            log.debug(
+                    "Paypal Webhook Verarbeitung beendet",
+                    kv("service", "billing-service"),
+                    kv("context", safeContext(
+                            "provider", "Paypal",
+                            "success", processingSuccessful,
+                            "durationMs", System.currentTimeMillis() - start
+                    ))
+            );
+            MDC.clear();
         }
     }
 }

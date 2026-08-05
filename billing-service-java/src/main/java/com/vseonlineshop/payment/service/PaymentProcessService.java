@@ -1,15 +1,14 @@
 package com.vseonlineshop.payment.service;
 
-import com.vseonlineshop.payment.dto.PaymentRequest;
-import com.vseonlineshop.payment.dto.PaymentResponse;
-import com.vseonlineshop.payment.dto.PaymentProviderResponse;
+import com.vseonlineshop.payment.dto.*;
+import com.vseonlineshop.payment.dto.refund.RefundProviderResponse;
 import com.vseonlineshop.payment.dto.refund.RefundRequestDto;
 import com.vseonlineshop.payment.entity.Payment;
 import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.entity.PaymentTransaction;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import com.vseonlineshop.payment.exception.PaymentSessionException;
-import com.vseonlineshop.payment.facade.PaymentPluginFacade;
+import com.vseonlineshop.payment.strategy.facade.PaymentPluginFacade;
 import com.vseonlineshop.payment.kafka.services.KafkaEventPublisher;
 import com.vseonlineshop.payment.repository.PaymentRepository;
 import com.vseonlineshop.payment.repository.PaymentTransactionRepository;
@@ -18,10 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.vseonlineshop.payment.config.LogUtils.safeContext;
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Service
@@ -40,7 +39,7 @@ public class PaymentProcessService {
         log.info(
                 "Payment Prozess gestartet",
                 kv("service", "billing-service"),
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "orderId", request.orderId(),
                         "amount", request.totalAmount()
                 ))
@@ -56,7 +55,7 @@ public class PaymentProcessService {
             log.warn(
                     "Payment bereits vorhanden - Idempotenz Check",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "paymentId", existingPayment.get().getPaymentId(),
                             "orderId", request.orderId()
                     ))
@@ -88,13 +87,13 @@ public class PaymentProcessService {
     }
 
 
-    public String processRefund(RefundRequestDto refundRequestDto, UUID correlationId) {
+    public RefundProviderResponse processRefund(RefundRequestDto refundRequestDto, UUID correlationId) {
 
 
         log.info(
                 "Refund Prozess gestartet",
                 kv("service", "billing-service"),
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "amount", refundRequestDto.amount(),
                         "currency", refundRequestDto.currency()
                 ))
@@ -113,13 +112,13 @@ public class PaymentProcessService {
             log.warn(
                     "Refund bereits erfolgreich verarbeitet",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "paymentId", payment.getPaymentId(),
                             "refundTransactionId", payment.getRefundTransactionId()
                     ))
             );
+            return RefundProviderResponse.builder().refundId(payment.getRefundTransactionId()).paymentStatus(PaymentStatus.REFUND_SUCCEEDED).build();
 
-            return payment.getRefundTransactionId();
         }
 
         if (payment.getStatus() == PaymentStatus.REFUND_INITIALIZED
@@ -129,7 +128,7 @@ public class PaymentProcessService {
             log.warn(
                     "Refund bereits in Verarbeitung",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "paymentId", payment.getPaymentId(),
                             "status", payment.getStatus()
                     ))
@@ -170,39 +169,39 @@ public class PaymentProcessService {
         try {
 
 
-            String refundTransactionId = paymentFacade.refund(transaction.getProviderTransactionId(), refundRequestDto.amount(), refundRequestDto.currency(), refundRequestDto.method());
+            RefundProviderResponse refundProviderResponse = paymentFacade.refund(transaction.getProviderTransactionId(), refundRequestDto.amount(), refundRequestDto.currency(), refundRequestDto.method());
 
             // 5. Status auf REFUND_SUCCEEDED setzen, Refund-ID speichern & Erfolgsevent feuern
             payment.setStatus(PaymentStatus.REFUND_SUCCEEDED);
-            payment.setRefundTransactionId(refundTransactionId);
+            payment.setRefundTransactionId(refundProviderResponse.refundId());
             paymentRepo.save(payment);
 
             log.info(
                     "Refund erfolgreich abgeschlossen",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "paymentId", payment.getPaymentId(),
-                            "refundTransactionId", refundTransactionId
+                            "refundTransactionId", refundProviderResponse.paymentStatus()
                     ))
             );
 
             safePublish(() ->
                     kafkaEventPublisher.publishRefundSucceeded(
                             payment,
-                            refundTransactionId,
+                            refundProviderResponse.refundId(),
                             refundRequestDto.amount()
                     )
             );
 
 
-            return refundTransactionId;
+            return refundProviderResponse;
         } catch (Exception e) {
 
 
             log.error(
                     "Refund fehlgeschlagen",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "paymentId", payment.getPaymentId(),
                             "errorMessage", e.getMessage()
                     )),
@@ -220,18 +219,11 @@ public class PaymentProcessService {
 
     }
 
-    /**
-     * Ruft den aktuellen Zahlungsstatus anhand der Correlation-ID ab.
-     *
-     * @param correlationId Die Eindeutige Trace-ID des Zahlungsvorgangs
-     * @return PaymentResponse DTO mit den aktuellen Zahlungsdetails
-     * @throws PaymentServiceException wenn keine Zahlung zur Correlation-ID existiert
-     */
     public PaymentResponse getByCorrelationId(UUID correlationId) {
         log.info(
                 "Abfrage des Zahlungsstatus per Correlation-ID",
                 kv("service", "billing-service"),
-                kv("context", Map.of("correlationId", correlationId))
+                kv("context", safeContext("correlationId", correlationId))
         );
 
         return paymentRepo.findByCorrelationId(correlationId)
@@ -240,7 +232,7 @@ public class PaymentProcessService {
                     log.warn(
                             "Keine Zahlung zur Correlation-ID gefunden",
                             kv("service", "billing-service"),
-                            kv("context", Map.of("correlationId", correlationId))
+                            kv("context", safeContext("correlationId", correlationId))
                     );
                     return new PaymentServiceException("Payment mit Correlation-ID " + correlationId + " wurde nicht gefunden.");
                 });
@@ -257,7 +249,7 @@ public class PaymentProcessService {
                 .build();
     }
 
-    public String getStatus(String transactionId) {
+    public PaymentStatusResponse getStatus(String transactionId) {
 
 
         try {
@@ -265,7 +257,7 @@ public class PaymentProcessService {
             log.info(
                     "Payment Statusabfrage gestartet",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "transactionId", transactionId
                     ))
             );
@@ -277,7 +269,7 @@ public class PaymentProcessService {
             log.error(
                     "Payment Statusabfrage fehlgeschlagen",
                     kv("service", "billing-service"),
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "transactionId", transactionId,
                             "errorMessage", ex.getMessage()
                     )),
@@ -291,7 +283,7 @@ public class PaymentProcessService {
     public PaymentResponse handleExistingPayment(Payment payment, PaymentRequest request) {
         log.warn(
                 "Duplicate Payment Request - Idempotency Check",
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "paymentId", payment.getPaymentId(),
                         "orderId", request.orderId()
                 ))
@@ -303,7 +295,7 @@ public class PaymentProcessService {
 
         log.info(
                 "Payment is still pending - creating new checkout session",
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "paymentId", payment.getPaymentId(),
                         "orderId", payment.getOrderId()
                 ))
@@ -352,7 +344,7 @@ public class PaymentProcessService {
 
         log.error(
                 "Payment Provider Session Erstellung fehlgeschlagen",
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "paymentId", paymentId,
                         "errorMessage", ex.getMessage()
                 )),
@@ -425,7 +417,7 @@ public class PaymentProcessService {
 
         log.info(
                 "Payment erfolgreich erstellt",
-                kv("context", Map.of(
+                kv("context", safeContext(
                         "paymentId", payment.getPaymentId(),
                         "orderId", payment.getOrderId(),
                         "status", payment.getStatus(),
@@ -440,10 +432,9 @@ public class PaymentProcessService {
         try {
             publishAction.run();
         } catch (Exception e) {
-            // todo: Wie können wir damit umgehen, damit wir die Nachvollziehbarkeit nicht verlieren können : Transactional Outbox Pattern.
             log.error(
                     "Kafka Event konnte nicht gesendet werden",
-                    kv("context", Map.of(
+                    kv("context", safeContext(
                             "errorMessage", e.getMessage()
                     )),
                     e

@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ProductService {
 
     private final ProductRepository productRepository;
@@ -81,7 +83,7 @@ public class ProductService {
 
         ids.add(category.getId());
 
-        if (category.getSubCategories() != null) {
+        if (!category.getSubCategories().isEmpty()){
 
             for (Category child : category.getSubCategories()) {
 
@@ -182,7 +184,7 @@ public class ProductService {
 
     public ProductResponse getProductById(UUID id) {
 
-        Product product = productRepository.findById(id)
+        Product product = productRepository.findWithCategoryById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Produkt mit ID " + id + " nicht gefunden."
@@ -210,18 +212,32 @@ public class ProductService {
                 .map(this::mapToResponse);
     }
 
+
     private ProductResponse mapToResponse(Product product) {
+
         return ProductResponse.builder()
                 .id(product.getId())
                 .sku(product.getSku())
                 .name(product.getName())
                 .slug(product.getSlug())
                 .description(product.getDescription())
-                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
-                .categorySlug(product.getCategory() != null ? product.getCategory().getSlug() : null)
+                .categoryName(
+                        product.getCategory() != null
+                                ? product.getCategory().getName()
+                                : null
+                )
+                .categorySlug(
+                        product.getCategory() != null
+                                ? product.getCategory().getSlug()
+                                : null
+                )
                 .price(product.getPrice())
                 .originalPrice(product.getOriginalPrice())
-                .imageUrls(product.getImageUrls())
+                .imageUrls(
+                        product.getImageUrls() != null
+                                ? new ArrayList<>(product.getImageUrls())
+                                : List.of()
+                )
                 .widthCm(product.getWidthCm())
                 .heightCm(product.getHeightCm())
                 .depthCm(product.getDepthCm())

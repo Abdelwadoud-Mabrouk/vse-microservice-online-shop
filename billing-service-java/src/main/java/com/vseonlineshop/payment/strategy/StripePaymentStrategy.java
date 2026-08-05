@@ -10,6 +10,8 @@ import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.vseonlineshop.payment.dto.*;
 import com.vseonlineshop.payment.dto.enums.PaymentMethod;
+import com.vseonlineshop.payment.dto.refund.RefundProviderResponse;
+import com.vseonlineshop.payment.entity.PaymentStatus;
 import com.vseonlineshop.payment.exception.PaymentServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -127,7 +129,7 @@ public class StripePaymentStrategy implements PaymentStrategy {
     }
 
     @Override
-    public String refund(String transactionId, BigDecimal amount, String currency) {
+    public RefundProviderResponse refund(String transactionId, BigDecimal amount, String currency) {
         log.info("[STRIPE/REFUND] Starte Refund für Transaktion={} mit Betrag={} {}",
                 transactionId, amount, currency);
 
@@ -151,7 +153,23 @@ public class StripePaymentStrategy implements PaymentStrategy {
             log.info("[STRIPE/REFUND_SUCCESS] Refund erfolgreich ausgeführt. Stripe-Refund-ID={}, Status={}",
                     refund.getId(), refund.getStatus());
 
-            return refund.getId();
+            // 💡 1. Stripe-Refund-Status auf eigenes Domänen-Enum mappen
+            String rawStatus = refund.getStatus() != null
+                    ? refund.getStatus().toLowerCase()
+                    : "";
+
+            PaymentStatus domainStatus = switch (rawStatus) {
+                case "succeeded" -> PaymentStatus.REFUND_SUCCEEDED;
+                case "pending" -> PaymentStatus.REFUND_INITIALIZED;
+                case "failed" -> PaymentStatus.REFUND_FAILED;
+                default -> PaymentStatus.REFUND_FAILED;
+            };
+
+            // 💡 2. Eigenes DTO (RefundProviderResponse) zurückgeben
+            return RefundProviderResponse.builder()
+                    .refundId(refund.getId())
+                    .paymentStatus(domainStatus)
+                    .build();
 
         } catch (InvalidRequestException e) {
             log.warn("[STRIPE/REFUND_DECLINED] Refund nicht möglich für Transaktion={}. Grund: {}",
@@ -173,30 +191,46 @@ public class StripePaymentStrategy implements PaymentStrategy {
     }
 
     @Override
-    public String getStatus(String providerTransactionId) {
+    public PaymentStatusResponse getStatus(String providerTransactionId) {
         try {
             Session session = stripeClient.v1()
                     .checkout()
                     .sessions()
                     .retrieve(providerTransactionId);
 
-            return session.getPaymentStatus();
+            String stripeStatus = session.getPaymentStatus();
+
+            PaymentStatus domainStatus = switch (stripeStatus != null ? stripeStatus.toLowerCase() : "") {
+                case "paid" -> PaymentStatus.CONFIRMED;
+                case "unpaid" -> PaymentStatus.PENDING;
+                default -> PaymentStatus.FAILED;
+            };
+
+            return PaymentStatusResponse.builder()
+                    .transactionId(providerTransactionId)
+                    .status(domainStatus)
+                    .build();
         } catch (InvalidRequestException e) {
             log.warn("[STRIPE/STATUS_NOT_FOUND] Keine Session gefunden für ID={}. Grund: {}",
                     providerTransactionId, e.getMessage());
-            return "UNKNOWN";
+            return PaymentStatusResponse.builder()
+                    .transactionId(providerTransactionId)
+                    .status(PaymentStatus.FAILED)
+                    .build();
 
         } catch (ApiConnectionException e) {
             log.error("[STRIPE/STATUS_TIMEOUT] Verbindungsfehler beim Statusabruf für ID={}",
                     providerTransactionId, e);
-            return "UNKNOWN";
+            throw new PaymentServiceException("Netzwerkfehler beim Abrufen des Stripe-Status", e);
 
         } catch (StripeException e) {
-            log.error("[STRIPE/STATUS_ERROR] Fehler beim Abrufen des Status für ID={}. Code={}",
+            log.error("[STRIPE/STATUS_ERROR] Stripe API Fehler für ID={}. Code={}",
                     providerTransactionId, e.getCode(), e);
-            return "UNKNOWN";
+            throw new PaymentServiceException("Stripe API Fehler beim Statusabruf: " + e.getMessage(), e);
+
         } catch (Exception e) {
-            throw new PaymentServiceException("Unerwarteter Fehler bei der Zahlungsabwicklung: " + e.getMessage(), e);
+            log.error("[STRIPE/STATUS_UNEXPECTED] Unerwarteter Fehler für ID={}", providerTransactionId, e);
+            throw new PaymentServiceException("Unerwarteter Fehler bei der Statusabfrage: " + e.getMessage(), e);
         }
     }
 

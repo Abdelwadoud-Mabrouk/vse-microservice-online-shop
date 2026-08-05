@@ -25,7 +25,7 @@ import static net.logstash.logback.argument.StructuredArguments.kv;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ToolService {
+public class OrderServiceTool {
 
     private final OrderRepository orderRepository;
     private final WarehouseClient warehouseClient;
@@ -83,9 +83,9 @@ public class ToolService {
 
                     Map<String, Object> context = new HashMap<>();
 
-                    context.put("reservationId", response.reservationId());
-                    context.put("orderId", response.orderId());
-                    context.put("status", response.status());
+                    context.put("reservationId", response!=null?response.reservationId():null);
+                    context.put("orderId", response!=null?response.orderId():null);
+                    context.put("status",  response!=null?response.status(): null);
 
 
                     log.info(
@@ -98,7 +98,7 @@ public class ToolService {
                     Map<String, Object> context = new HashMap<>();
 
                     context.put("reservationId", reservationOrderId);
-                    context.put("orderId", order != null ? order.getId() : null);
+                    context.put("orderId", order.getId());
                     context.put("errorMessage", ex.getMessage());
 
 

@@ -258,6 +258,7 @@ services:
       - "8090:8087"
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      LOG_PATH: /app/logs
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATASOURCE_URL: jdbc:postgresql://shop-db:5432/shop_db
       SHOP_DB_URL: jdbc:postgresql://shop-db:5432/shop_db
@@ -279,7 +280,7 @@ services:
       kafka-init:
         condition: service_completed_successfully
     volumes:
-      - shop-logs:/app/logs
+      - ./logs/shop-service:/app/logs
 
   # =========================
   # Shop Product Seed
@@ -315,6 +316,7 @@ services:
       - "8081:8089"
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      LOG_PATH: /app/logs
 
       # Sichere DB-Verbindung (Nutzt Umgebungsvariable oder Standard-Docker-URL)
       SPRING_DATASOURCE_URL: ${BILLING_DB_URL:-jdbc:postgresql://billing-db:5432/billing_db}
@@ -336,6 +338,8 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+    volumes:
+      - ./logs/billing-service:/app/logs
 
   # =========================
   # NGROK TUNNEL

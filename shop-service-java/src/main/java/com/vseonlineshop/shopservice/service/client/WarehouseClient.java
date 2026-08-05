@@ -1,23 +1,27 @@
 package com.vseonlineshop.shopservice.service.client;
 
 import com.vseonlineshop.shopservice.domain.Order;
-import com.vseonlineshop.shopservice.dto.warehouse.*;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationCommitedResponse;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequest;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationRequestItem;
+import com.vseonlineshop.shopservice.dto.warehouse.ReservationResponse;
+import com.vseonlineshop.shopservice.exception.WarehouseServiceException;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 import static com.vseonlineshop.shopservice.config.LogUtils.safeContext;
-import static net.logstash.logback.argument.StructuredArguments.kv;
+import static net.logstash.logback.argument.StructuredArguments.kv; // Oder deine safeContext/kv Importe
 
 @Service
 @Slf4j
@@ -25,140 +29,210 @@ public class WarehouseClient {
 
     private final RestClient restClient;
 
-
-    public WarehouseClient(
-            @Qualifier("warehouseRestClient") RestClient restClient
-    ) {
+    public WarehouseClient(@Qualifier("warehouseRestClient") RestClient restClient) {
         this.restClient = restClient;
     }
 
     @Retry(name = "warehouseReserve")
     public ReservationResponse reserve(Order order) {
+        UUID correlationId = order.getCorrelationId();
+        UUID orderId = order.getId();
+
         log.info(
-                "Warehouse Request gestartet",
+                "Warehouse Reserve Request gestartet",
+                kv("correlationId", correlationId),
+                kv("service", "shop-service"),
                 kv("context", safeContext(
-                        "correlationId", order.getCorrelationId(),
-                        "orderId", order.getId(),
+                        "orderId", orderId,
                         "operation", "POST /reservations"
-                ))
-        );
-        return post("/reservations",
-                order,
-                buildRequest(order),
-                ReservationResponse.class);
-    }
-
-    @Retry(name = "warehouseCommit")
-    public ReservationCommitedResponse reservationCommited(Order order) {
-
-        log.info(
-                "Warehouse Commit Request gestartet",
-                kv("context", safeContext(
-                        "correlationId", order.getCorrelationId(),
-                        "orderId", order.getId(),
-                        "operation", "POST /reservations/{id}/commit"
-                ))
-        );
-        return post("/reservations/{id}/commit",
-                order,
-                buildRequest(order),
-                ReservationCommitedResponse.class,
-                order.getReservationId());
-    }
-
-    @Retry(name = "warehouseCancel")
-    public ReservationResponse cancelReservation(Order order) {
-        return delete(
-                order,
-                order.getReservationId()
-        );
-    }
-
-    private <T> T delete(Order order, Object... uriVars) {
-        log.info(
-                "Warehouse Delete Request gestartet",
-                kv("context", safeContext(
-                        "correlationId", order.getCorrelationId(),
-                        "orderId", order.getId(),
-                        "operation", "DELETE /reservations/{id}"
                 ))
         );
 
         try {
-            return restClient.delete()
-                    .uri("/reservations/{id}", uriVars)
-                    .header("X-Correlation-Id", order.getCorrelationId().toString())
+            ReservationResponse response = restClient.post()
+                    .uri("/reservations")
+                    .header("X-Correlation-Id", Objects.toString(correlationId, ""))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(buildRequest(order))
                     .retrieve()
                     .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
                         throw new HttpServerErrorException(res.getStatusCode(), "Warehouse 5xx Server Error");
                     })
                     .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        throw new HttpClientErrorException(res.getStatusCode(), "Warehouse 4xx Client Error");
+                        throw new WarehouseServiceException("Warehouse Reserve abgelehnt HTTP " + res.getStatusCode());
                     })
-                    .body((Class<T>) ReservationResponse.class);
+                    .body(ReservationResponse.class);
+
+            assert response != null;
+            log.info(
+                    "Warehouse Reserve erfolgreich",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext(
+                            "orderId", orderId,
+                            "reservationId", response.reservationId() // Oder wie dein Getter/Record-Feld heißt
+                    ))
+            );
+
+            return response;
 
         } catch (ResourceAccessException | HttpServerErrorException ex) {
             log.error(
-                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    "Warehouse Service technisch nicht erreichbar",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
                     kv("context", safeContext(
-                            "orderId", order.getId(),
-                            "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                            "orderId", orderId,
+                            "exception", ex.getClass().getSimpleName(),
+                            "message", ex.getMessage()
+                    ))
             );
             throw ex;
-        } catch (RestClientException ex) {
-            log.error(
-                    "Warehouse Business/Client Fehler (kein Retry)",
+
+        } catch (WarehouseServiceException ex) {
+            log.warn(
+                    "Warehouse Reserve fachlich abgelehnt",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
                     kv("context", safeContext(
-                            "orderId", order.getId(),
-                            "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                            "orderId", orderId,
+                            "reason", ex.getMessage()
+                    ))
             );
             throw ex;
         }
     }
 
-    private <T> T post(String uri,
-                       Order order,
-                       Object body,
-                       Class<T> responseType,
-                       Object... uriVars) {
+    @Retry(name = "warehouseCommit")
+    public ReservationCommitedResponse reservationCommited(Order order) {
+        UUID correlationId = order.getCorrelationId();
+        UUID orderId = order.getId();
+
+        log.info(
+                "Warehouse Commit Request gestartet",
+                kv("correlationId", correlationId),
+                kv("service", "shop-service"),
+                kv("context", safeContext(
+                        "orderId", orderId,
+                        "operation", "POST /reservations/{id}/commit"
+                ))
+        );
 
         try {
-            return restClient.post()
-                    .uri(uri, uriVars)
+            ReservationCommitedResponse response = restClient.post()
+                    .uri("/reservations/{id}/commit", order.getReservationId())
+                    .header("X-Correlation-Id", Objects.toString(correlationId, ""))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Correlation-Id", order.getCorrelationId().toString())
-                    .body(body)
+                    .body(buildRequest(order))
                     .retrieve()
                     .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
                         throw new HttpServerErrorException(res.getStatusCode(), "Warehouse 5xx Server Error");
                     })
                     .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        throw new HttpClientErrorException(res.getStatusCode(), "Warehouse 4xx Client Error");
+                        throw new WarehouseServiceException("Warehouse Commit abgelehnt HTTP " + res.getStatusCode());
                     })
-                    .body(responseType);
+                    .body(ReservationCommitedResponse.class);
+
+            log.info(
+                    "Warehouse Commit erfolgreich",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext(
+                            "orderId", orderId,
+                            "status", response!=null?response.status():null
+                    ))
+            );
+
+            return response;
 
         } catch (ResourceAccessException | HttpServerErrorException ex) {
             log.error(
-                    "Temporaerer Warehouse Fehler (wird per Retry wiederholt)",
+                    "Warehouse Commit technisch fehlgeschlagen",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
                     kv("context", safeContext(
-                            "orderId", order.getId(),
-                            "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                            "orderId", orderId,
+                            "exception", ex.getClass().getSimpleName(),
+                            "message", ex.getMessage()
+                    ))
             );
             throw ex;
-        } catch (RestClientException ex) {
-            log.error(
-                    "Warehouse Business/Client Fehler (kein Retry)",
+
+        } catch (WarehouseServiceException ex) {
+            log.warn(
+                    "Warehouse Commit fachlich abgelehnt",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
                     kv("context", safeContext(
-                            "orderId", order.getId(),
-                            "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                            "orderId", orderId,
+                            "reason", ex.getMessage()
+                    ))
+            );
+            throw ex;
+        }
+    }
+
+    @Retry(name = "warehouseCancel")
+    public ReservationResponse cancelReservation(Order order) {
+        UUID correlationId = order.getCorrelationId();
+        UUID orderId = order.getId();
+
+        log.info(
+                "Warehouse Delete Request gestartet",
+                kv("correlationId", correlationId),
+                kv("service", "shop-service"),
+                kv("context", safeContext(
+                        "orderId", orderId,
+                        "operation", "DELETE /reservations/{id}"
+                ))
+        );
+
+        try {
+            ReservationResponse response = restClient.delete()
+                    .uri("/reservations/{id}", order.getReservationId())
+                    .header("X-Correlation-Id", Objects.toString(correlationId, ""))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                        throw new HttpServerErrorException(res.getStatusCode(), "Warehouse 5xx Server Error");
+                    })
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                        throw new WarehouseServiceException("Warehouse Cancel abgelehnt HTTP " + res.getStatusCode());
+                    })
+                    .body(ReservationResponse.class);
+
+            // SAFES LOGGING (ohne assert!):
+            log.info(
+                    "Warehouse Stornierung erfolgreich",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext(
+                            "orderId", orderId
+                    ))
+            );
+
+            return response;
+        } catch (ResourceAccessException | HttpServerErrorException ex) {
+            log.error(
+                    "Warehouse Stornierung technisch fehlgeschlagen",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext(
+                            "orderId", orderId,
+                            "exception", ex.getClass().getSimpleName(),
+                            "message", ex.getMessage()
+                    ))
+            );
+            throw ex;
+
+        } catch (WarehouseServiceException ex) {
+            log.warn(
+                    "Warehouse Stornierung fachlich abgelehnt",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext(
+                            "orderId", orderId,
+                            "reason", ex.getMessage()
+                    ))
             );
             throw ex;
         }

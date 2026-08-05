@@ -1,5 +1,7 @@
 package com.vseonlineshop.payment.strategy;
 
+import com.vseonlineshop.payment.dto.PaymentStatusResponse;
+import com.vseonlineshop.payment.dto.refund.RefundProviderResponse;
 import com.vseonlineshop.payment.dto.enums.PaymentMethod;
 import com.vseonlineshop.payment.dto.PaymentRequest;
 import com.vseonlineshop.payment.dto.PaymentProviderResponse;
@@ -16,9 +18,9 @@ public interface PaymentStrategy {
 
     PaymentProviderResponse charge(PaymentRequest request, UUID paymentId);
 
-    String refund(String transactionId, BigDecimal amount, String currency);
+    RefundProviderResponse refund(String transactionId, BigDecimal amount, String currency);
 
-    String getStatus(String transactionId);
+    PaymentStatusResponse getStatus(String transactionId);
 
     boolean supportsTransactionId(String transactionId);
 }

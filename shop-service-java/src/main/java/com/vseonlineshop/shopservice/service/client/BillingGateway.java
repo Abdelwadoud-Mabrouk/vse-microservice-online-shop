@@ -84,8 +84,7 @@ public class BillingGateway {
                             "orderId", orderId,
                             "exception", ex.getClass().getSimpleName(),
                             "message", ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
             throw ex;
 
@@ -153,8 +152,7 @@ public class BillingGateway {
                             "orderId", orderId,
                             "exception", ex.getClass().getSimpleName(),
                             "message", ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
             throw ex;
 
@@ -216,8 +214,7 @@ public class BillingGateway {
                     kv("context", safeContext(
                             "exception", ex.getClass().getSimpleName(),
                             "message", ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
             throw ex;
 

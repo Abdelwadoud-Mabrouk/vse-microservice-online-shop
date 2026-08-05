@@ -61,6 +61,7 @@ class ShopOrderIntegrationTest {
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("services.warehouse.url", () -> "http://localhost:" + wireMockExtension.getPort());
         registry.add("services.payment.url", () -> "http://localhost:" + wireMockExtension.getPort() + "/api/v1/billing");
+        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9092");
     }
 
 
@@ -177,7 +178,6 @@ class ShopOrderIntegrationTest {
 
         // 3. DB Prüfen: Order existiert mit Status OUT_OF_STOCK
         List<Order> orders = orderRepository.findAll();
-        System.out.println(orders.stream().findFirst().get().getStatus());
         assertThat(orders).hasSize(1);
         assertThat(orders.get(0).getStatus()).isEqualTo(OrderStatus.OUT_OF_STOCK);
 
