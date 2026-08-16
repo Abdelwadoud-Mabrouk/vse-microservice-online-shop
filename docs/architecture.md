@@ -553,9 +553,7 @@ Das macht ihre Grenzen sichtbar und erlaubt unabhängige Änderungen.
 
 ### ADR 2: REST und Kafka gemeinsam
 
-Direkte Entscheidungen laufen über REST. Fachliche Ereignisse laufen über
-Kafka. Diese Aufteilung verbindet eine klare Antwort an den Kunden mit
-entkoppelter Verarbeitung.
+Direkte Entscheidungen (z. B. Bestandsprüfung, Checkout-URL) laufen synchron über REST. Fachliche Hintergrundereignisse werden asynchron über Apache Kafka verarbeitet. Diese Aufteilung verbindet unmittelbare Antworten an den Kunden mit entkoppelter Verarbeitung. Kafka wurde dabei gegenüber RabbitMQ gewählt, da es Events dauerhaft in einem Commit-Log speichert: Das ermöglicht dem Audit-Service eine lückenlose Historie und ausgefallenen Services das Nachlesen verpasster Events nach einem Ausfall (Saga-Recovery).
 
 ### ADR 3: Database per Service
 
@@ -598,6 +596,89 @@ Service und Repository auf Code-Ebene kann das Modul bei steigender Last jederze
 ### ADR 10: Wahl von Stripe und PayPal als primäre Payment-Adapter
 
 Die Payment-Fassade benötigt mindestens zwei konkrete Provider-Adapter, um das Adapter-Pattern und die Konfigurierbarkeit sinnvoll zu demonstrieren. Gewählt wurden Stripe und PayPal, da beide weltweit zu den am weitesten verbreiteten und ausgereiftesten Payment-Service-Providern zählen und zugleich unterschiedliche Integrationsmuster abbilden (direkte API-Anbindung bei Stripe vs. Redirect-basierter Checkout-Flow bei PayPal). Klarna wurde bewusst nicht als gleichrangiger Adapter modelliert, da es primär ein BNPL-Anbieter ist und selbst häufig über PSPs wie Stripe angebunden wird, statt eine eigenständige, global vergleichbare Zahlungsinfrastruktur bereitzustellen. Durch die strikte Kapselung hinter der Fassade und das Open/Closed Principle kann ein KlarnaAdapter oder jeder weitere Anbieter jederzeit ergänzt werden, ohne bestehenden Code zu verändern.
+
+## Erweiterbarkeitsanalyse: Hinzufügen eines vierten Zahlungsanbieters
+
+Durch die Kombination aus **Strategy Pattern**, **Facade Pattern** und Springs automatischer *Dependency Injection* folgt das Zahlungssystem dem **Open-Closed-Priniple (OCP)**: Das System ist offen für Erweiterungen, aber geschlossen für Modifikationen.
+
+---
+
+### Invasivitäts-Übersicht
+
+| Kategorie | Komponente / Datei | Aktion | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| **Neu / Geändert** | `.../provider/StripePaymentStrategy.java` | **Neu erstellen** | Implementiert das `PaymentStrategy`-Interface für den neuen Anbieter. |
+| **Neu / Geändert** | `application.yml` | **Anpassen** | Routing-Eintrag für die neue Zahlungsart / den neuen Provider hinzufügen. |
+| **Unverändert** | `PaymentPluginFacade.java` | *Keine* | Injiziert alle Strategien automatisch via Spring (`List<PaymentStrategy>`). |
+| **Unverändert** | `PaymentStrategy.java` | *Keine* | Schnittstellenvertrag bleibt unverändert. |
+| **Unverändert** | Restliche Provider (`PayPal`, `Klarna`, etc.) | *Keine* | Vollständig entkoppelt, keine Auswirkung auf bestehende Logik. |
+| **Unverändert** | Service- & Controller-Layer | *Keine* | Aufrufer nutzen weiterhin nur die Fassade, ohne Details zu kennen. |
+
+---
+
+### Schritt-für-Schritt-Anleitung zur Integration
+
+#### Schritt 1: Neue Strategie implementieren (Neue Datei)
+Erstelle eine neue Klasse, die das Interface `PaymentStrategy` implementiert und mit `@Component` annotiert ist:
+
+```java
+package com.vseonlineshop.billingservice.service.payment.provider;
+
+import com.vseonlineshop.billingservice.service.payment.PaymentStrategy;
+import org.springframework.stereotype.Component;
+
+@Component
+public class StripePaymentStrategy implements PaymentStrategy {
+
+    @Override
+    public String getProviderName() {
+        return "stripe";
+    }
+
+    @Override
+    public boolean supports(PaymentMethod method) {
+        return method == PaymentMethod.CREDIT_CARD;
+    }
+
+    @Override
+    public boolean supportsTransactionId(String transactionId) {
+        return transactionId != null && transactionId.startsWith("str_");
+    }
+
+    @Override
+    public PaymentProviderResponse charge(PaymentRequest request, UUID paymentId) {
+        // Logik für Zahlungsabwicklung über Stripe
+    }
+
+    @Override
+    public RefundProviderResponse refund(String transactionId, BigDecimal amount, String currency) {
+        // Logik für Rückerstattung
+    }
+
+    @Override
+    public PaymentStatusResponse getStatus(String transactionId) {
+        // Logik für Abfrage des Zahlungsstatus
+    }
+}
+```
+
+#### Schritt 2: Konfiguration erweitern (application.yml)
+Ergänze das Mapping in der application.yml, um die gewünschte Zahlungsmethode auf den neuen Provider zu routen:
+
+```yaml
+payment:
+  routing:
+    CREDIT_CARD: "stripe"
+    PAYPAL: "paypal"
+    SOFORT: "klarna"
+```
+
+```text
+Warum die Kernkomponenten nicht geändert werden müssen
+Automatische Service-Discovery: Spring erkennt die neue Klasse @Component StripePaymentStrategy beim Anwendungsstart automatisch und fügt sie der List<PaymentStrategy> providers in der PaymentPluginFacade hinzu.
+
+Dynamische Auflösung: Die Methode resolveStrategy(...) in der PaymentPluginFacade liest den Ziel-Provider zur Laufzeit aus den PaymentRoutingProperties (payment.routing) aus und wählt die passende Implementierung anhand von getProviderName() und supports(method).
+```
 ## Fazit
 
 Die Architektur trennt fachliche Verantwortlichkeiten klar voneinander und verbindet synchrone Entscheidungen mit ereignisbasierter Kommunikation. Durch Database per Service, stabile Event-Verträge und idempotente Verarbeitung bleibt das System nachvollziehbar und erweiterbar. Die praktische Umsetzung sowie die Testergebnisse werden im Abschlussbericht beschrieben.

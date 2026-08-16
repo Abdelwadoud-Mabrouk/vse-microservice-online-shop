@@ -1,3 +1,4 @@
+
 package com.vseonlineshop.shopservice.event.consumer;
 
 
@@ -42,7 +43,6 @@ public class PaymentEventConsumer {
     private final BillingService paymentClient;
 
 
-
     @KafkaListener(
             topics = "${kafka.topics.payment}",
             groupId = "shop-order-service-group"
@@ -51,14 +51,14 @@ public class PaymentEventConsumer {
     public void onPaymentEvent(ConsumerRecord<String, DomainEvent<Object>> record) {
         DomainEvent<?> domainEvent = record.value();
 
+        if (domainEvent == null) {
+            log.error("Empfangenes Kafka DomainEvent ist NULL!");
+            return;
+        }
+
         log.info(
-                "Kafka Event empfangen",
-                kv("correlationId", domainEvent.correlationId()),
-                kv("service", "shop-service"),
-                kv("context", safeContext(
-                        "eventType", domainEvent.eventType(),
-                        "sourceService", domainEvent.service()
-                ))
+                "Kafka Event empfangen. EventType: '{}'",
+                domainEvent.eventType()
         );
 
 
@@ -122,15 +122,13 @@ public class PaymentEventConsumer {
                         kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "errorMessage", ex.getMessage()
-                        )),
-                        ex
+                        ))
                 );
 
                 handleDispatchFailed(order, "WAREHOUSE_COMMIT_FAILED");
                 return;
             }
 
-            // Safety check: was dispatch really successful
             if (commitResponse == null
                     || !commitResponse.orderId().equals(order.getId())
                     || !commitResponse.correlationId().equals(order.getCorrelationId())
@@ -177,8 +175,7 @@ public class PaymentEventConsumer {
                     kv("context", safeContext(
                             "orderId", order != null ? order.getId() : "N/A",
                             "errorMessage", ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
 
             Map<String, String> metadata = Map.of(
@@ -211,7 +208,6 @@ public class PaymentEventConsumer {
                 ))
         );
 
-
         safePublish(() -> kafkaEventPublisher.publishWarehouseDispatchFailed(order, reason));
         try {
             RefundResponseDto refundResponse = paymentClient.refund(order);
@@ -242,8 +238,7 @@ public class PaymentEventConsumer {
                             "orderId", order.getId(),
                             "reason", reason,
                             "errorMessage", refundEx.getMessage()
-                    )),
-                    refundEx
+                    ))
             );
 
             order.setStatus(OrderStatus.REFUND_PENDING);
@@ -293,7 +288,7 @@ public class PaymentEventConsumer {
             }
 
             order.setStatus(OrderStatus.PAYMENT_FAILED);
-            order.setPaymentId(payload.paymentId().toString());
+            order.setPaymentId(payload.paymentId() != null ? payload.paymentId().toString() : null);
             orderRepository.save(order);
 
             log.info(
@@ -307,7 +302,6 @@ public class PaymentEventConsumer {
             );
 
             Order finalOrder = order;
-            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(finalOrder, payload.failureReason()));
 
 
             log.info(
@@ -336,19 +330,20 @@ public class PaymentEventConsumer {
                         response.status());
             } catch (RestClientException ex) {
 
-                assert response != null;
                 log.info(
-                        "Warehouse Reservation erfolgreich freigegeben",
+                        "Fehler beim Freigeben der Warehouse Reservation",
                         kv("correlationId", order.getCorrelationId()),
                         kv("service", "shop-service"),
                         kv("context", safeContext(
                                 "orderId", order.getId(),
                                 "reservationId", order.getCorrelationId(),
-                                "status", response.status()
+                                "status", response != null ? response.status() : null
                         ))
                 );
                 systemAlert(order, "RESERVATION_RELEASE_FAILED", ex);
             }
+
+            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(finalOrder, payload.failureReason()));
 
         } catch (Exception ex) {
             log.error(
@@ -367,8 +362,7 @@ public class PaymentEventConsumer {
                                     : "N/A",
                             "errorMessage",
                             ex.getMessage()
-                    )),
-                    ex
+                    ))
             );
             systemAlert(order, "INTERNAL_ERROR", ex);
         }

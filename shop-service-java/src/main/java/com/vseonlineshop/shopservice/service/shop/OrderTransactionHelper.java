@@ -27,8 +27,8 @@ public class OrderTransactionHelper {
     private final ProductRepository productRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Order createInitialOrder(OrderRequest request, UUID correlationId) {
-        Order order = buildInitialOrder(request, correlationId);
+    public Order createInitialOrder(OrderRequest request, UUID correlationId, UUID idempotencyKey) {
+        Order order = buildInitialOrder(request, correlationId,idempotencyKey);
         return orderRepository.save(order);
     }
 
@@ -84,10 +84,11 @@ public class OrderTransactionHelper {
         return address;
     }
 
-    private Order buildInitialOrder(OrderRequest request, UUID correlationId) {
+    private Order buildInitialOrder(OrderRequest request, UUID correlationId, UUID idempotencyKey) {
 
         Order order = new Order();
         order.setCorrelationId(correlationId);
+        order.setIdempotencyKey(idempotencyKey);
         order.setCurrency(request.currency());
         order.setPaymentMethod(request.paymentMethod());
         order.setStatus(OrderStatus.PENDING);

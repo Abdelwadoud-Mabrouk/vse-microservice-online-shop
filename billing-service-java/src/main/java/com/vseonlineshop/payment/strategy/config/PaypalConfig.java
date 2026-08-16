@@ -20,7 +20,7 @@ public class PaypalConfig {
     @Value("${paypal.environment:sandbox}")
     private String paypalEnvironment;
 
-    @Value("${paypal.timeout:30}")
+    @Value("${paypal.timeout}")
     private long timeoutSeconds;
 
     Environment environment =

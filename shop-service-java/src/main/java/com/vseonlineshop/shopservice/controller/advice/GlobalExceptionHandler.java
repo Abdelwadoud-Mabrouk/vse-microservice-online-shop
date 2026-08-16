@@ -37,7 +37,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex) {
-        log.warn("[BUSINESS EXCEPTION] {}", ex.getMessage());
 
         ErrorResponse errorBody = new ErrorResponse(
                 ex.getErrorCode() != null ? ex.getErrorCode() : "BUSINESS_ERROR",
@@ -50,7 +49,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex) {
-        log.error("[SERVICE UNAVAILABLE] {}", ex.getMessage());
 
         ErrorResponse errorBody = new ErrorResponse(
                 ex.getErrorCode(),
@@ -63,8 +61,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception ex) {
-        // Logge den unvorhergesehenen Fehler für einfaches Debugging!
-        log.error("[UNEXPECTED ERROR] Unerwarteter Systemfehler:", ex);
 
         ErrorResponse errorBody = new ErrorResponse(
                 "INTERNAL_SERVER_ERROR",

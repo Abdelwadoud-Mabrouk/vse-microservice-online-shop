@@ -12,6 +12,7 @@ import com.vseonlineshop.shopservice.service.client.BillingService;
 import com.vseonlineshop.shopservice.service.client.WarehouseClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
@@ -19,6 +20,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
@@ -37,19 +39,45 @@ public class OrderApplicationService {
     private final OrderServiceTool toolService;
 
 
-
     // ── Create Order ─────────────────────────────────────────────────────────
-    public CheckoutResponse createOrder(OrderRequest request) {
-        Order order;
+    public CheckoutResponse createOrder(OrderRequest request, UUID idempotencyKey) {
+
         long start = System.currentTimeMillis();
 
-        // Initiales Anlegen
+        Optional<Order> existingOrderOpt = orderRepository.findByIdempotencyKey(idempotencyKey);
+
+        if (existingOrderOpt.isPresent()) {
+            Order existingOrder = existingOrderOpt.get();
+
+            if (existingOrder.getStatus() == OrderStatus.PENDING
+                    || existingOrder.getStatus() == OrderStatus.PROCESSING) {
+                log.warn("Order wird bereits verarbeitet, Duplikat-Request abgelehnt",
+                        kv("correlationId", existingOrder.getCorrelationId()),
+                        kv("service", "shop-service"),
+                        kv("context", safeContext("idempotencyKey", idempotencyKey)));
+
+                throw new BusinessException(
+                        "Bestellung wird bereits verarbeitet. Bitte warten.", HttpStatus.CONFLICT
+                );
+            }
+
+            log.info("Duplikat-Request erkannt, gebe bestehende Order zurück",
+                    kv("correlationId", existingOrder.getCorrelationId()),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext("orderId", existingOrder.getId(), "status", existingOrder.getStatus())));
+
+            return toolService.mapToCheckoutResponse(existingOrder);
+        }
+
+        Order order;
         UUID correlationId = UUID.randomUUID();
+
         try {
-            order = orderTransactionHelper.createInitialOrder(request, correlationId);
+            order = orderTransactionHelper.createInitialOrder(request, correlationId, idempotencyKey);
             log.info(
                     "Order erfolgreich angelegt",
                     kv("correlationId", order.getCorrelationId()),
+                    kv("idempotencyKey", idempotencyKey),
                     kv("service", "shop-service"),
                     kv("context", safeContext(
                             "orderId", order.getId(),
@@ -58,8 +86,17 @@ public class OrderApplicationService {
             );
             Order finalOrder = order;
             toolService.safePublish(() -> kafkaEventPublisher.publishOrderCreated(finalOrder));
-        } catch (Exception ex) {
 
+        } catch (DataIntegrityViolationException dupEx) {
+            log.warn("Race Condition bei idempotencyKey erkannt, lade Ergebnis des parallelen Requests",
+                    kv("correlationId", correlationId),
+                    kv("service", "shop-service"),
+                    kv("context", safeContext("idempotencyKey", idempotencyKey)));
+
+            throw new BusinessException("Bestellung wird bereits verarbeitet.", HttpStatus.BAD_REQUEST);
+
+
+        } catch (Exception ex) {
             log.error(
                     "Konnte initiale Order nicht in DB anlegen",
                     kv("correlationId", correlationId),
@@ -90,7 +127,6 @@ public class OrderApplicationService {
                         ))
                 );
 
-                // Setzt Status auf OUT_OF_STOCK und bricht SOFORT ab (kein Retry/weiterer Aufruf)
                 toolService.cancelOrder(order, null, OrderStatus.OUT_OF_STOCK, "OUT_OF_STOCK", ex);
                 throw new BusinessException("OUT_OF_STOCK", HttpStatus.CONFLICT);
 
@@ -165,7 +201,6 @@ public class OrderApplicationService {
                         ))
                 );
 
-                // Rollback durchführen (Lager freigeben)
                 toolService.cancelOrder(order, reservation.reservationId(), OrderStatus.PAYMENT_FAILED, "PAYMENT_SERVICE_UNAVAILABLE", ex);
 
                 throw new ServiceUnavailableException("PAYMENT_SERVICE_UNAVAILABLE", "Zahlungsservice derzeit nicht erreichbar.");
@@ -186,8 +221,7 @@ public class OrderApplicationService {
             );
             return checkoutResponse;
 
-        }
-        catch (ServiceUnavailableException ex) {
+        } catch (ServiceUnavailableException ex) {
 
             log.warn(
                     "Externer Service nicht verfügbar",
@@ -231,10 +265,7 @@ public class OrderApplicationService {
             );
 
             throw ex;
-        }
-
-
-        catch (Exception ex) {
+        } catch (Exception ex) {
 
             log.error(
                     "Unerwarteter Fehler im Order-Prozess",

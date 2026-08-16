@@ -63,14 +63,13 @@ public class WarehouseClient {
                     })
                     .body(ReservationResponse.class);
 
-            assert response != null;
             log.info(
                     "Warehouse Reserve erfolgreich",
                     kv("correlationId", correlationId),
                     kv("service", "shop-service"),
                     kv("context", safeContext(
                             "orderId", orderId,
-                            "reservationId", response.reservationId() // Oder wie dein Getter/Record-Feld heißt
+                            "reservationId", response!=null?response.reservationId():null
                     ))
             );
 
@@ -199,8 +198,6 @@ public class WarehouseClient {
                         throw new WarehouseServiceException("Warehouse Cancel abgelehnt HTTP " + res.getStatusCode());
                     })
                     .body(ReservationResponse.class);
-
-            // SAFES LOGGING (ohne assert!):
             log.info(
                     "Warehouse Stornierung erfolgreich",
                     kv("correlationId", correlationId),

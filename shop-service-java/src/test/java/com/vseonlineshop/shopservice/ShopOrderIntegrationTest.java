@@ -125,6 +125,7 @@ class ShopOrderIntegrationTest {
     void createOrder_success() throws Exception {
 
         UUID reservationId = UUID.randomUUID();
+        UUID idempotencyKey = UUID.randomUUID();
 
         // 1. WireMock-Mocks aufsetzen
         mockWarehouseSuccess(reservationId);
@@ -134,6 +135,7 @@ class ShopOrderIntegrationTest {
         mockMvc.perform(
                         post("/api/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", idempotencyKey)
                                 .content(objectMapper.writeValueAsString(sampleRequest))
                 )
                 .andExpect(status().isCreated())
@@ -156,12 +158,57 @@ class ShopOrderIntegrationTest {
         verify(1, postRequestedFor(urlEqualTo("/api/v1/billing/pay")));
     }
 
+
+    @Test
+    @DisplayName("""
+            IDEMPOTENZ-TEST:
+            Zweiter Request mit identischem Idempotency-Key gibt bestehende Order zurück (Echte Idempotenz)
+            """)
+    void createOrder_duplicateIdempotencyKey_shouldReturnExistingOrder() throws Exception {
+        UUID reservationId = UUID.randomUUID();
+        UUID idempotencyKey = UUID.randomUUID();
+
+        mockWarehouseSuccess(reservationId);
+        mockPaymentSuccess();
+
+        // 1. Erster Request (Erfolgreich)
+        String responseJson = mockMvc.perform(
+                        post("/api/v1/orders")
+                                .header("Idempotency-Key", idempotencyKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(sampleRequest))
+                )
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String firstOrderId = objectMapper.readTree(responseJson).get("orderId").asText();
+
+        mockMvc.perform(
+                        post("/api/v1/orders")
+                                .header("Idempotency-Key", idempotencyKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(sampleRequest))
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderId").value(firstOrderId))
+                .andExpect(jsonPath("$.status").value("AWAITING_PAYMENT"));
+
+        List<Order> orders = orderRepository.findAll();
+        assertThat(orders).hasSize(1);
+        assertThat(orders.get(0).getId().toString()).isEqualTo(firstOrderId);
+    }
+
     @Test
     @DisplayName("""
             FEHLERSZENARIO 1:
             Warehouse hat keinen Bestand (409 Conflict) -> Order wird OUT_OF_STOCK -> Status 409 Conflict
             """)
     void createOrder_warehouseOutOfStock_shouldFailWithConflict() throws Exception {
+
+        UUID idempotencyKey = UUID.randomUUID();
+
         // 1. Mocking: Warehouse antwortet mit 409 Conflict (Client Error)
         stubFor(
                 WireMock.post(urlEqualTo("/reservations"))
@@ -172,6 +219,7 @@ class ShopOrderIntegrationTest {
         mockMvc.perform(
                         post("/api/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", idempotencyKey)
                                 .content(objectMapper.writeValueAsString(sampleRequest))
                 )
                 .andExpect(status().isConflict());
@@ -193,6 +241,7 @@ class ShopOrderIntegrationTest {
             """)
     void createOrder_paymentUnavailable_shouldRollbackWarehouseAndReturn503() throws Exception {
         UUID reservationId = UUID.randomUUID();
+        UUID idempotencyKey = UUID.randomUUID();
 
         // 1. Mocking: Warehouse reserviert erfolgreich
         mockWarehouseSuccess(reservationId);
@@ -213,6 +262,7 @@ class ShopOrderIntegrationTest {
         mockMvc.perform(
                         post("/api/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", idempotencyKey)
                                 .content(objectMapper.writeValueAsString(sampleRequest))
                 )
                 .andExpect(status().isServiceUnavailable());
@@ -234,6 +284,9 @@ class ShopOrderIntegrationTest {
             Warehouse liefert leere Reservierung -> Order wird CANCELLED -> Status 400 Bad Request
             """)
     void createOrder_emptyWarehouseReservation_shouldFailWithBadRequest() throws Exception {
+
+        UUID idempotencyKey = UUID.randomUUID();
+
         // 1. Mocking: Warehouse schickt leeres items-Array
         stubFor(
                 WireMock.post(urlEqualTo("/reservations"))
@@ -251,6 +304,7 @@ class ShopOrderIntegrationTest {
         mockMvc.perform(
                         post("/api/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", idempotencyKey)
                                 .content(objectMapper.writeValueAsString(sampleRequest))
                 )
                 .andExpect(status().isBadRequest());
@@ -272,6 +326,8 @@ class ShopOrderIntegrationTest {
             """)
     void createOrder_warehouseServerError_shouldReturn503AndNotCallBilling() throws Exception {
 
+        UUID idempotencyKey = UUID.randomUUID();
+
         // 1. Mocking: Warehouse antwortet mit 503 Service Unavailable
 
         stubFor(
@@ -283,6 +339,7 @@ class ShopOrderIntegrationTest {
         mockMvc.perform(
                         post("/api/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", idempotencyKey)
                                 .content(objectMapper.writeValueAsString(sampleRequest))
                 )
                 .andExpect(status().isServiceUnavailable());
@@ -292,7 +349,6 @@ class ShopOrderIntegrationTest {
         assertThat(orders).hasSize(1);
 
         Order order = orders.get(0);
-        // Passe den erwarteten Status an deine Business-Logik an (z. B. CANCELLED oder FAILED)
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
         // 4. WireMock-Verifizierungen:

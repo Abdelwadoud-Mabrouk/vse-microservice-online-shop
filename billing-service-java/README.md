@@ -22,7 +22,7 @@ Der Billing-Service wird vom Shop-Service während des Bestellprozesses aufgeruf
 ## Technologie
 
 * Java 21
-* Spring Boot 3
+* Spring Boot 4
 * Spring Web
 * Spring Data JPA
 * PostgreSQL

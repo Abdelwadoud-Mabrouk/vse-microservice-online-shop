@@ -56,13 +56,10 @@ public class OrderServiceTool {
                                 "orderId", order.getId(),
                                 "targetStatus", targetStatus,
                                 "errorMessage", dbEx.getMessage()
-                        )),
-                        dbEx
+                        ))
                 );
             }
 
-            // Event über Kafka publizieren
-            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
 
             // Lager-Reservierung stornieren
             if (reservationOrderId != null) {
@@ -111,8 +108,10 @@ public class OrderServiceTool {
                     );
                 }
             }
-        }
 
+            // Event über Kafka publizieren
+            safePublish(() -> kafkaEventPublisher.publishOrderCancelled(order, reason));
+        }
         if (targetStatus != OrderStatus.OUT_OF_STOCK) {
             Map<String, String> metadata = Map.of(
                     "correlationId", order != null ? order.getCorrelationId().toString() : "Unknown",
@@ -192,6 +191,10 @@ public class OrderServiceTool {
                 order.getStatus(),
                 order.getCreatedAt()
         );
+    }
+
+    public CheckoutResponse mapToCheckoutResponse(Order order){
+         return new CheckoutResponse(order.getId(),order.getStatus(),order.getTotalAmount(),order.getCurrency(),null);
     }
 
     public void safePublish(Runnable publishAction) {

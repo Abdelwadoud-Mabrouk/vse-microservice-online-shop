@@ -39,11 +39,12 @@ public class OrderController {
             @ApiResponse(responseCode = "409", description = "Kein Bestand im Warehouse verfügbar"),
             @ApiResponse(responseCode = "503", description = "Zahlungs- oder Lager-Service nicht erreichbar")
     })
-    public ResponseEntity<CheckoutResponse> checkout(@Valid @RequestBody OrderRequest request) {
-        log.info("[OrderController] Neue Order-Anfrage, lastName={}, provider={}, items={}",
-                request.customer().lastName(), request.paymentMethod(), request.items().size());
+    public ResponseEntity<CheckoutResponse> checkout(@Valid @RequestBody OrderRequest request, @RequestHeader("Idempotency-Key") UUID idempotencyKey) {
+        log.info("[OrderController] Neue Order-Anfrage, lastName={}, provider={}, items={}, idempotencyKey={}",
+                request.customer().lastName(), request.paymentMethod(), request.items().size(), idempotencyKey);
 
-        CheckoutResponse response = orderApplicationService.createOrder(request);
+
+        CheckoutResponse response = orderApplicationService.createOrder(request, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
