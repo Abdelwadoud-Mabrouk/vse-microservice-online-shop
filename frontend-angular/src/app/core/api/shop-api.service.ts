@@ -1,5 +1,5 @@
 import {Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpHeaders} from '@angular/common/http';
 import {Observable, catchError, of} from 'rxjs';
 import {CheckoutResponse, CreateOrderRequest, Order, OrderResponse} from '../models/order.model';
 import {Product} from '../models/product.model';
@@ -81,8 +81,16 @@ export class ShopApiService {
             .pipe(catchError(() => of(demoProducts.find((product) => product.id === productId))));
     }
 
-    createOrder(request: CreateOrderRequest): Observable<CheckoutResponse> {
-        return this.http.post<CheckoutResponse>(`${this.baseUrl}/orders`, request);
+    createOrder(request: CreateOrderRequest, idempotencyKey: string): Observable<CheckoutResponse> {
+        const headers = new HttpHeaders({
+            'Idempotency-Key': idempotencyKey
+        });
+
+        return this.http.post<CheckoutResponse>(
+            `${this.baseUrl}/orders`,
+            request,
+            { headers }
+        );
     }
 
     getOrder(orderId: string): Observable<OrderResponse> {

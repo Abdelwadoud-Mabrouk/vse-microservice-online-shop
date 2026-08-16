@@ -11,7 +11,7 @@ Der Service koordiniert die Kommunikation zwischen den Microservices und sorgt b
 ## Technologie
 
 * Java 21
-* Spring Boot 3
+* Spring Boot 4
 * Spring Web
 * Spring Data JPA
 * PostgreSQL
@@ -41,7 +41,6 @@ GET    /api/v1/products/filter
 | POST | `/api/v1/orders` | Erstellt eine neue Bestellung, reserviert den Bestand und startet den Zahlungsvorgang. |
 | GET | `/api/v1/orders/{id}` | Liefert die Details einer Bestellung. |
 | POST | `/api/v1/orders/capture/{token}` | Schließt eine PayPal-Zahlung ab. Dieser Endpunkt wird nur für PayPal verwendet. |
-| **Products** | | |
 | GET | `/api/v1/products` | Liefert alle aktiven Produkte (paginiert). |
 | GET | `/api/v1/products/{id}` | Liefert Produktdetails anhand der ID. |
 | GET | `/api/v1/products/details/{slug}` | Liefert Produktdetails anhand des Slugs. |

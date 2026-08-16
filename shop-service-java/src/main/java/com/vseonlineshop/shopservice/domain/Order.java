@@ -30,6 +30,9 @@ public class Order {
     @Column(name = "correlation_id", nullable = false, unique = true)
     private UUID correlationId;
 
+    @Column(name = "idempotency_key", nullable = false, unique = true)
+    private UUID idempotencyKey;
+
     @Column(name = "user_id")
     private UUID userId;
 

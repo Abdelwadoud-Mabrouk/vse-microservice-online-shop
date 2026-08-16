@@ -21,6 +21,7 @@ import {Router} from "@angular/router";
 export class CheckoutComponentComponent {
     error = signal<string | null>(null);
     loading = signal(false);
+    private readonly idempotencyKey: string = crypto.randomUUID();
 
     shipping = {
 
@@ -57,6 +58,9 @@ export class CheckoutComponentComponent {
 
     placeOrder(): void {
 
+        if (this.loading()) {
+            return;
+        }
         this.loading.set(true);
 
         this.error.set('');
@@ -105,7 +109,7 @@ export class CheckoutComponentComponent {
 
         };
 
-        this.shopApi.createOrder(request)
+        this.shopApi.createOrder(request,this.idempotencyKey)
             .subscribe({
 
                 next: order => {
