@@ -1,0 +1,36 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: spring-microservices
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          env: production
+          team: spring-team
+          __path__: /var/log/app-logs/**/*.json
+
+    pipeline_stages:
+      - regex:
+          source: filename
+          expression: '/var/log/app-logs/(?P<service_name>[^/]+)/'
+
+      - labels:
+          service_name:
+
+      - json:
+          expressions:
+            level: level
+            correlationId: correlationId
+            message: message
+
+      - labels:
+          level:
