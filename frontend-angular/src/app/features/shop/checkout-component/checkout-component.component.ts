@@ -1,6 +1,6 @@
 import {Component, signal} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {CurrencyPipe} from '@angular/common';
+import {CurrencyPipe, NgFor} from '@angular/common';
 
 import {CartService} from '../cart.service';
 import {ShopApiService} from '../../../core/api/shop-api.service';
@@ -13,7 +13,9 @@ import {Router} from "@angular/router";
     standalone: true,
     imports: [
         CurrencyPipe,
-        FormsModule
+        FormsModule,
+        NgFor
+
     ],
     templateUrl: './checkout-component.component.html',
     styleUrl: './checkout-component.component.scss'
@@ -45,9 +47,16 @@ export class CheckoutComponentComponent {
 
     };
 
-    paymentMethod = PaymentMethod.PAYPAL;
+    paymentMethods = [
+        { value: PaymentMethod.CREDIT_CARD, label: 'Kreditkarte', code: 'CC' },
+        { value: PaymentMethod.KLARNA,      label: 'Klarna',      code: 'K'  },
+        { value: PaymentMethod.PAYPAL,      label: 'PayPal',       code: 'PP' },
+        { value: PaymentMethod.APPLE_PAY,   label: 'Apple Pay',    code: 'AP' },
+        { value: PaymentMethod.GOOGLE_PAY,  label: 'Google Pay',   code: 'GP' },
+    ];
 
-    readonly PaymentMethod = PaymentMethod;
+    paymentMethod = PaymentMethod.CREDIT_CARD;
+
 
     constructor(
         readonly cart: CartService,

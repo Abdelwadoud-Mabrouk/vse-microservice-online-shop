@@ -1,148 +1,207 @@
 <section class="checkout">
 
-    <h1>Checkout</h1>
+    <div class="checkout-head">
+        <p class="eyebrow">Checkout</p>
+        <h1>Bestellung abschließen</h1>
+    </div>
 
-    <!-- Lieferadresse -->
+    <div class="form-col">
 
-    <section class="checkout-card">
+        <!-- Lieferadresse -->
+        <form #checkoutForm="ngForm">
+            <section class="checkout-card">
+                <h2>Lieferadresse <span class="num">01</span></h2>
+                <div class="form-grid">
 
-        <h2>Lieferadresse</h2>
+                    <div class="field">
+                        <label>Vorname</label>
+                        <input
+                                type="text"
+                                name="firstName"
+                                placeholder="Anna"
+                                required
+                                #firstName="ngModel"
+                                [(ngModel)]="shipping.firstName">
+                        @if (firstName.invalid && firstName.touched) {
+                            <span class="field-error">Bitte Vorname angeben.</span>
+                        }
+                    </div>
 
-        <div class="form-grid">
+                    <div class="field">
+                        <label>Nachname</label>
+                        <input
+                                type="text"
+                                name="lastName"
+                                placeholder="Berger"
+                                required
+                                #lastName="ngModel"
+                                [(ngModel)]="shipping.lastName">
+                        @if (lastName.invalid && lastName.touched) {
+                            <span class="field-error">Bitte Nachname angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Vorname"
-                    [(ngModel)]="shipping.firstName">
+                    <div class="field">
+                        <label>E-Mail</label>
+                        <input
+                                type="email"
+                                name="email"
+                                placeholder="anna.berger@example.com"
+                                required
+                                email
+                                #email="ngModel"
+                                [(ngModel)]="shipping.email">
+                        @if (email.invalid && email.touched) {
+                            <span class="field-error">Bitte gültige E-Mail angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Nachname"
-                    [(ngModel)]="shipping.lastName">
+                    <div class="field">
+                        <label>Telefon</label>
+                        <input
+                                type="text"
+                                name="phone"
+                                placeholder="+49 151 23456789"
+                                required
+                                #phone="ngModel"
+                                [(ngModel)]="shipping.phone">
+                        @if (phone.invalid && phone.touched) {
+                            <span class="field-error">Bitte Telefonnummer angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="email"
-                    placeholder="E-Mail"
-                    [(ngModel)]="shipping.email">
+                    <div class="field">
+                        <label>Straße</label>
+                        <input
+                                type="text"
+                                name="street"
+                                placeholder="Musterstraße"
+                                required
+                                #street="ngModel"
+                                [(ngModel)]="shipping.street">
+                        @if (street.invalid && street.touched) {
+                            <span class="field-error">Bitte Straße angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Telefon"
-                    [(ngModel)]="shipping.phone">
+                    <div class="field">
+                        <label>Hausnummer</label>
+                        <input
+                                type="text"
+                                name="houseNumber"
+                                placeholder="12a"
+                                required
+                                #houseNumber="ngModel"
+                                [(ngModel)]="shipping.houseNumber">
+                        @if (houseNumber.invalid && houseNumber.touched) {
+                            <span class="field-error">Bitte Hausnummer angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Straße"
-                    [(ngModel)]="shipping.street">
+                    <div class="field">
+                        <label>PLZ</label>
+                        <input
+                                type="text"
+                                name="postalCode"
+                                placeholder="60311"
+                                required
+                                pattern="\d{4,5}"
+                                #postalCode="ngModel"
+                                [(ngModel)]="shipping.postalCode">
+                        @if (postalCode.invalid && postalCode.touched) {
+                            <span class="field-error">Bitte gültige PLZ angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Hausnummer"
-                    [(ngModel)]="shipping.houseNumber">
+                    <div class="field">
+                        <label>Stadt</label>
+                        <input
+                                type="text"
+                                name="city"
+                                placeholder="Frankfurt am Main"
+                                required
+                                #city="ngModel"
+                                [(ngModel)]="shipping.city">
+                        @if (city.invalid && city.touched) {
+                            <span class="field-error">Bitte Stadt angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="PLZ"
-                    [(ngModel)]="shipping.postalCode">
+                    <div class="field span-2">
+                        <label>Land</label>
+                        <input
+                                type="text"
+                                name="country"
+                                placeholder="Deutschland"
+                                required
+                                #country="ngModel"
+                                [(ngModel)]="shipping.country">
+                        @if (country.invalid && country.touched) {
+                            <span class="field-error">Bitte Land angeben.</span>
+                        }
+                    </div>
 
-            <input
-                    type="text"
-                    placeholder="Stadt"
-                    [(ngModel)]="shipping.city">
+                </div>
+            </section>
+        </form>
 
-            <input
-                    type="text"
-                    placeholder="Land"
-                    [(ngModel)]="shipping.country">
+        <!-- Zahlung -->
+        <section class="checkout-card">
+            <h2>Zahlungsmethode <span class="num">02</span></h2>
+            <div class="pay-options">
+                <label
+                        class="pay-option"
+                        *ngFor="let option of paymentMethods"
+                        [class.selected]="paymentMethod === option.value">
+                    <input
+                            type="radio"
+                            name="pay"
+                            [value]="option.value"
+                            [(ngModel)]="paymentMethod">
+                    <span class="mono">{{ option.code }}</span>
+                    <span class="label">{{ option.label }}</span>
+                </label>
+            </div>
+        </section>
 
-        </div>
-
-    </section>
-
-
-    <!-- Zahlung -->
-
-    <section class="checkout-card">
-
-        <h2>Zahlungsmethode</h2>
-
-        <select [(ngModel)]="paymentMethod">
-
-            <option [value]="PaymentMethod.PAYPAL">
-                PayPal
-            </option>
-
-            <option [value]="PaymentMethod.CREDIT_CARD">
-                Kreditkarte
-            </option>
-
-            <option [value]="PaymentMethod.KLARNA">
-                Klarna
-            </option>
-
-            <option [value]="PaymentMethod.APPLE_PAY">
-                Apple Pay
-            </option>
-
-            <option [value]="PaymentMethod.GOOGLE_PAY">
-                Google Pay
-            </option>
-
-        </select>
-
-    </section>
-
+    </div>
 
     <!-- Übersicht -->
+    <div class="receipt-wrap">
+        <div class="receipt">
+            <div class="stamp">Sicher<br>bezahlen</div>
 
-    <section class="checkout-card">
+            <h2>Bestellübersicht</h2>
+            <p class="sub">{{ cart.count() }} Artikel im Warenkorb</p>
 
-        <h2>Bestellübersicht</h2>
+            <div class="line">
+                <span>Artikel</span>
+                <strong>{{ cart.count() }}</strong>
+            </div>
 
-        <p>
+            <hr class="divider">
 
-            Artikel
+            <div class="line total">
+                <span>Gesamt</span>
+                <strong>{{ cart.total() | currency:'EUR' }}</strong>
+            </div>
 
-            <strong>
+            @if (error()) {
+                <div class="error">
+                    <span class="dot"></span>
+                    <span>{{ error() }}</span>
+                </div>
+            }
 
-                {{ cart.count() }}
-
-            </strong>
-
-        </p>
-
-        <p>
-
-            Gesamt
-
-            <strong>
-
-                {{ cart.total() | currency:'EUR' }}
-
-            </strong>
-
-        </p>
-
-    </section>
-
-
-    @if(error()){
-
-        <div class="error">
-
-            {{ error() }}
-
+            <div class="receipt-foot">
+                <button
+                        class="pay-button"
+                        (click)="placeOrder()"
+                        [disabled]="checkoutForm.invalid || loading() || cart.count() === 0">
+                    {{ loading() ? 'Bestellung wird erstellt...' : 'Jetzt bezahlen' }}
+                </button>
+            </div>
         </div>
-
-    }
-
-    <button
-            class="pay-button"
-            (click)="placeOrder()"
-            [disabled]="loading() || cart.count()===0">
-
-        {{ loading() ? 'Bestellung wird erstellt...' : 'Jetzt bezahlen' }}
-
-    </button>
+    </div>
 
 </section>
