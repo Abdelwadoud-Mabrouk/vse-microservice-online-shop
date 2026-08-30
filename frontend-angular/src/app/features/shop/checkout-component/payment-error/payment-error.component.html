@@ -1,33 +1,32 @@
 <section class="error-page">
 
-    <h1>
-        Bestellung konnte nicht abgeschlossen werden
-    </h1>
+    <!-- Optisches Warn-Icon als Blickfang -->
+    <div class="error-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+    </div>
 
-
-    <p>
-        {{ message }}
-    </p>
-
+    <p class="eyebrow">Zahlung fehlgeschlagen</p>
+    <h1>Bestellung konnte nicht abgeschlossen werden</h1>
+    <p class="message">{{ message }}</p>
 
     @if (details) {
-
         <p class="error-details">
             {{ details }}
         </p>
-
     }
 
+    <div class="actions">
+        <button class="secondary-button" (click)="backToCheckout()">
+            Zurück zum Checkout
+        </button>
 
-    <button
-            (click)="backToCheckout()">
-
-        Zurück zum Checkout
-
-    </button>
-
-    <a routerLink="/shop/products" class="primary-button">
-        Weiter einkaufen
-    </a>
+        <a routerLink="/shop/products" class="primary-button">
+            Weiter einkaufen
+        </a>
+    </div>
 
 </section>
