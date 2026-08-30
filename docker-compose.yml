@@ -273,9 +273,9 @@ services:
     depends_on:
       shop-db:
         condition: service_healthy
-      billing-service: # Sicherstellen, dass das Billing-Service gestartet ist
+      billing-service:
         condition: service_started
-      warehouse-service: # Sicherstellen, dass das Warehouse-Service gestartet ist
+      warehouse-service:
         condition: service_started
       kafka-init:
         condition: service_completed_successfully
@@ -318,7 +318,7 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       LOG_PATH: /app/logs
 
-      # Sichere DB-Verbindung (Nutzt Umgebungsvariable oder Standard-Docker-URL)
+
       SPRING_DATASOURCE_URL: ${BILLING_DB_URL:-jdbc:postgresql://billing-db:5432/billing_db}
       SPRING_DATASOURCE_USERNAME: ${BILLING_DB_USERNAME:-billing_user}
       SPRING_DATASOURCE_PASSWORD: ${BILLING_DB_PASSWORD:-billing_password}
@@ -412,6 +412,17 @@ services:
     volumes:
       - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
+
+  promtail:
+      image: grafana/promtail:3.3.2
+      command: -config.file=/etc/promtail/promtail-config.yml
+      depends_on:
+        - loki
+      networks:
+        - shop-network
+      volumes:
+        - ./promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+        - ./logs:/var/log/app-logs:ro
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.1
