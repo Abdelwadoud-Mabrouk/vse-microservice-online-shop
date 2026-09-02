@@ -1,0 +1,589 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+% ============================================================
+% Finale Projektpraesentation – Vertiefung Software Engineering
+% Strategie: eine Bestellung als durchgehende Story, 1 Sprecherwechsel
+% Zielzeit: ca. 30–35 Minuten
+% ============================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{fontawesome5}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit}
+
+\usetheme{CambridgeUS}
+\usecolortheme{dolphin}
+\usefonttheme{professionalfonts}
+\setbeamertemplate{navigation symbols}{}
+
+% Farben aus der Zwischenpraesentation
+\definecolor{hsBlue}{RGB}{22,81,155}
+\definecolor{hsGray}{RGB}{90,90,90}
+\definecolor{ShopBlue}{HTML}{2563EB}
+\definecolor{JavaOrange}{HTML}{F97316}
+\definecolor{DotnetBlue}{HTML}{0EA5E9}
+\definecolor{InfraGray}{HTML}{64748B}
+\definecolor{AuditGreen}{HTML}{16A34A}
+\definecolor{WarnRed}{HTML}{DC2626}
+\definecolor{SoftGray}{RGB}{245,247,250}
+
+\setbeamercolor{structure}{fg=hsBlue}
+\setbeamercolor{item}{fg=hsBlue}
+\setbeamercolor{frametitle}{fg=white,bg=hsBlue}
+\setbeamercolor{title}{fg=white,bg=hsBlue}
+
+% Logo optional
+\logo{\IfFileExists{logo_Hochschule.png}{\includegraphics[width=1.8cm]{logo_Hochschule.png}}{}}
+
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.64\paperwidth,ht=2.5ex,dp=1ex,leftskip=.3cm]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.36\paperwidth,ht=2.5ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}Folie \insertframenumber{} / \inserttotalframenumber\hspace{.6cm}
+    \end{beamercolorbox}%
+  }%
+}
+
+\tikzset{
+  service/.style={rectangle,rounded corners=2mm,draw=#1,thick,fill=#1!10,align=center,minimum width=2.4cm,minimum height=.9cm,font=\small},
+  mini/.style={rectangle,rounded corners=1.5mm,draw=#1,thick,fill=#1!8,align=center,minimum width=1.8cm,minimum height=.7cm,font=\scriptsize},
+  db/.style={cylinder,shape border rotate=90,aspect=.25,draw=#1,thick,fill=#1!10,align=center,minimum width=1.5cm,minimum height=.9cm,font=\scriptsize},
+  arrow/.style={-{Latex[length=2.2mm]},thick},
+  event/.style={-{Latex[length=2.2mm]},thick,dashed},
+  story/.style={rectangle,rounded corners=2mm,draw=hsBlue,very thick,fill=hsBlue!7,align=center,minimum height=1.0cm},
+  bad/.style={rectangle,rounded corners=2mm,draw=WarnRed,very thick,fill=WarnRed!8,align=center,minimum height=.9cm},
+  good/.style={rectangle,rounded corners=2mm,draw=AuditGreen,very thick,fill=AuditGreen!8,align=center,minimum height=.9cm}
+}
+
+\newcommand{\speakerA}{\textcolor{DotnetBlue}{\faUser\ Abdelwadoud}}
+\newcommand{\speakerB}{\textcolor{JavaOrange}{\faUser\ Mohammed}}
+\newcommand{\storyline}[1]{\vspace{.25cm}\begin{center}\colorbox{hsBlue!8}{\parbox{.92\linewidth}{\centering\small\textbf{#1}}}\end{center}}
+
+\title[Microservice-Online-Shop]{Microservice-Architektur eines Möbel-Online-Shops}
+\subtitle{Abschlusspräsentation – Vertiefung Software Engineering}
+\author{\textbf{Abdelwadoud Mabrouk} \quad \textbf{Mohammed Amine Grioui}}
+\institute{Fachhochschule Südwestfalen\\Prof. Dr.-Ing. Doga Arinir\\Sommersemester 2026}
+\date{6. September 2026}
+
+\begin{document}
+
+% ------------------------------------------------------------
+% 1 – Titel | ca. 0:30
+% ------------------------------------------------------------
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ------------------------------------------------------------
+% 2 – Einstieg | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Was passiert nach dem Klick auf „Bestellen“?}
+\centering
+\begin{tikzpicture}[node distance=.65cm]
+  \node[story,minimum width=2.1cm] (order) {\faShoppingCart\\Bestellen};
+  \node[story,minimum width=2.1cm,right=of order] (stock) {\faBoxes\\Bestand};
+  \node[story,minimum width=2.1cm,right=of stock] (pay) {\faCreditCard\\Zahlung};
+  \node[story,minimum width=2.1cm,right=of pay] (inv) {\faFileInvoice\\Rechnung};
+  \node[story,minimum width=2.1cm,right=of inv] (audit) {\faSearch\\Nachvollziehen};
+  \draw[arrow] (order)--(stock); \draw[arrow] (stock)--(pay); \draw[arrow] (pay)--(inv); \draw[arrow] (inv)--(audit);
+\end{tikzpicture}
+
+\vspace{.8cm}
+\begin{block}{Die eigentliche Herausforderung}
+Für den Kunden ist es ein Klick. Technisch müssen mehrere unabhängige Services zusammenarbeiten – auch dann, wenn ein Schritt fehlschlägt.
+\end{block}
+\storyline{Leitfrage: Wie bleibt eine verteilte Bestellung konsistent, robust und nachvollziehbar?}
+\end{frame}
+
+% ------------------------------------------------------------
+% 3 – Anforderungen | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Welche Anforderungen bestimmen die Architektur?}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Fachlich}
+\begin{itemize}
+  \item Bestand darf nicht doppelt verkauft werden
+  \item Zahlung und Bestand müssen zusammenpassen
+  \item Rechnung erst nach erfolgreicher Zahlung
+  \item Fehler brauchen einen definierten Ablauf
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Technisch}
+\begin{itemize}
+  \item klare Datenhoheit pro Service
+  \item Idempotenz gegen Doppelverarbeitung
+  \item Correlation-ID für Nachvollziehbarkeit
+  \item reproduzierbares Deployment
+\end{itemize}
+\end{block}
+\end{columns}
+\storyline{Nicht „möglichst viele Technologien“, sondern klare Verantwortlichkeiten und kontrollierte Fehlerbehandlung.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 4 – Architektur | A | ca. 2:00
+% ------------------------------------------------------------
+\begin{frame}{Unsere Lösung: fünf fachlich getrennte Services}
+\centering
+\begin{tikzpicture}[node distance=.45cm and .55cm,scale=.93,transform shape]
+  \node[service=ShopBlue] (front) {Angular 22\\Frontend};
+  \node[service=JavaOrange,right=of front] (shop) {Shop\\Spring Boot};
+  \node[service=JavaOrange,right=of shop] (bill) {Billing\\Spring Boot};
+  \node[service=DotnetBlue,below=1.1cm of shop] (ware) {Warehouse\\.NET 10};
+  \node[service=DotnetBlue,right=of ware] (invoice) {Invoice\\.NET 10};
+  \node[service=AuditGreen,left=of ware] (audit) {Audit\\.NET 10};
+  \node[service=InfraGray,below=1.0cm of ware] (kafka) {Apache Kafka\\Event Bus};
+  \draw[arrow] (front)-- node[above,font=\scriptsize]{REST} (shop);
+  \draw[arrow] (shop)-- node[above,font=\scriptsize]{REST} (bill);
+  \draw[arrow] (shop)-- node[left,font=\scriptsize]{REST} (ware);
+  \draw[event] (shop)--(kafka); \draw[event] (bill)--(kafka); \draw[event] (kafka)--(invoice); \draw[event] (kafka)--(audit);
+\end{tikzpicture}
+
+\vspace{.15cm}
+{\scriptsize\textcolor{hsGray}{Durchgezogen: synchrone REST-Aufrufe \quad | \quad Gestrichelt: Events über Kafka}}
+
+\vspace{.25cm}
+\begin{columns}[T,onlytextwidth]
+\column{.32\textwidth}\centering\textbf{REST}\\direkte Entscheidungen
+\column{.32\textwidth}\centering\textbf{Kafka}\\fachliche Ereignisse
+\column{.32\textwidth}\centering\textbf{Database per Service}\\eigene DB pro Service
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------
+% 5 – Aufteilung | A | ca. 1:20
+% ------------------------------------------------------------
+\begin{frame}{Klare Verantwortlichkeiten im Team}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{\speakerA}
+\begin{itemize}
+  \item Warehouse-Service
+  \item Invoice-Service
+  \item Audit-Service
+  \item Angular-Setup / Admin- und Audit-Bereich
+  \item Observability: OpenTelemetry, Loki, Grafana
+  \item .NET Unit- und E2E-Tests
+\end{itemize}
+\end{block}
+\column{.47\textwidth}
+\begin{block}{\speakerB}
+\begin{itemize}
+  \item Shop-Service
+  \item Billing-Service
+  \item Payment-Fassade
+  \item Stripe / PayPal / Webhooks
+  \item Checkout-Frontend
+  \item Java-Integration und Tests
+\end{itemize}
+\end{block}
+\end{columns}
+\vspace{.2cm}
+\centering\textbf{Gemeinsam:} Architektur, Event-Verträge, Correlation-ID, Docker Compose und Integration
+\end{frame}
+
+% ------------------------------------------------------------
+% 6 – REST/Kafka | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Warum REST und Kafka zusammen?}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{REST – „Ich brauche jetzt eine Antwort“}
+\begin{itemize}
+  \item Bestand reservieren
+  \item Zahlung initialisieren
+  \item Commit / Cancel
+  \item klarer HTTP-Status bei Fehlern
+\end{itemize}
+\end{block}
+\column{.47\textwidth}
+\begin{block}{Kafka – „Etwas ist passiert“}
+\begin{itemize}
+  \item Payment-Events
+  \item Invoice-Erstellung
+  \item Audit-Timeline
+  \item Services bleiben entkoppelt
+\end{itemize}
+\end{block}
+\end{columns}
+\storyline{REST für Entscheidungen. Kafka für Ereignisse.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 7 – Warehouse | A | ca. 2:00
+% ------------------------------------------------------------
+\begin{frame}{Wie verhindern wir, dass das letzte Sofa zweimal verkauft wird?}
+\centering
+\begin{tikzpicture}[node distance=.75cm]
+  \node[story,minimum width=2.4cm] (r) {\textbf{RESERVE}\\Bestand blockieren};
+  \node[good,minimum width=2.4cm,right=2.8cm of r,yshift=.8cm] (c) {\textbf{COMMIT}\\endgültig abbuchen};
+  \node[bad,minimum width=2.4cm,right=2.8cm of r,yshift=-.8cm] (x) {\textbf{CANCEL}\\wieder freigeben};
+  \draw[arrow] (r.east)--(c.west) node[pos=.56,above=2pt,sloped,font=\scriptsize]{Zahlung erfolgreich};
+  \draw[arrow] (r.east)--(x.west) node[pos=.56,below=2pt,sloped,font=\scriptsize]{Abbruch / Fehler};
+\end{tikzpicture}
+
+\vspace{.65cm}
+\begin{itemize}
+  \item Reservierung trennt „verfügbar“ von „endgültig verkauft“.
+  \item \texttt{orderId} identifiziert genau eine Reservierung.
+  \item Wiederholtes Commit oder Cancel verändert den Bestand nicht erneut.
+  \item Kritische Bestandsänderungen werden transaktional abgesichert.
+\end{itemize}
+\end{frame}
+
+% ------------------------------------------------------------
+% 8 – Parallelität | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Zwei Kunden – nur ein Sofa}
+\centering
+\begin{tikzpicture}[node distance=1cm and 1.2cm]
+  \node[story] (a) {Kunde A\\Reserve 1 Stück};
+  \node[story,right=4.5cm of a] (b) {Kunde B\\Reserve 1 Stück};
+  \node[service=DotnetBlue,below=1.2cm of $(a)!0.5!(b)$,minimum width=3.4cm] (w) {Warehouse\\Bestand = 1};
+  \node[good,below left=1cm and .25cm of w] (ok) {A: reserviert \faCheck};
+  \node[bad,below right=1cm and .25cm of w] (no) {B: 409 \faTimes};
+  \draw[arrow] (a)--(w); \draw[arrow] (b)--(w); \draw[arrow] (w)--(ok); \draw[arrow] (w)--(no);
+\end{tikzpicture}
+\vspace{.35cm}
+\begin{block}{Ziel}
+Auch bei parallelen Requests darf der verfügbare Bestand nie negativ werden und nur eine Reservierung erfolgreich sein.
+\end{block}
+\end{frame}
+
+% ------------------------------------------------------------
+% 9 – Out of Stock | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Worst Case 1: Was passiert ohne Bestand?}
+\centering
+\begin{tikzpicture}[node distance=.55cm]
+  \node[story] (o) {Bestellung};
+  \node[story,right=of o] (r) {Reserve};
+  \node[bad,right=of r] (f) {\textbf{409}\\OUT OF STOCK};
+  \node[bad,right=of f] (s) {STOP};
+  \draw[arrow] (o)--(r); \draw[arrow] (r)--(f); \draw[arrow] (f)--(s);
+\end{tikzpicture}
+\vspace{.7cm}
+\begin{columns}[T,onlytextwidth]
+\column{.23\textwidth}\centering\faTimesCircle\\\textbf{keine Zahlung}
+\column{.23\textwidth}\centering\faTimesCircle\\\textbf{kein Commit}
+\column{.23\textwidth}\centering\faTimesCircle\\\textbf{keine Rechnung}
+\column{.23\textwidth}\centering\faCheckCircle\\\textbf{kein Rollback nötig}
+\end{columns}
+\storyline{Kontrollierter Abbruch statt Kompensation: Es wurde noch kein Zustand erzeugt, der zurückgerollt werden muss.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 10 – Invoice/Audit | A | ca. 1:45
+% ------------------------------------------------------------
+\begin{frame}{Was passiert nach einer erfolgreichen Zahlung?}
+\centering
+\begin{tikzpicture}[node distance=.8cm and 1.5cm]
+  \node[good,minimum width=3cm] (p) {\texttt{PAYMENT\_SUCCEEDED}};
+  \node[service=DotnetBlue,below left=1.2cm and .5cm of p] (i) {Invoice\\PDF-Rechnung};
+  \node[service=AuditGreen,below right=1.2cm and .5cm of p] (a) {Audit\\Event-Timeline};
+  \draw[event] (p)--(i); \draw[event] (p)--(a);
+\end{tikzpicture}
+\vspace{.45cm}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\textbf{Invoice}
+\begin{itemize}
+  \item asynchrone PDF-Erstellung
+  \item Retry bei Schreibfehlern
+  \item \texttt{paymentId} verhindert zweite Rechnung
+\end{itemize}
+\column{.47\textwidth}
+\textbf{Audit}
+\begin{itemize}
+  \item append-only Historie
+  \item \texttt{eventId} gegen Duplikate
+  \item \texttt{correlationId} verbindet Services
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------
+% 11 – Observability | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Wie finden wir heraus, warum eine Bestellung fehlgeschlagen ist?}
+\begin{columns}[T,onlytextwidth]
+\column{.46\textwidth}
+\begin{block}{Fachliche Sicht – Audit}
+\centering
+\faList\quad Was ist mit Bestellung X passiert?
+\vspace{.25cm}
+\begin{itemize}
+  \item Event-Timeline
+  \item Statusübergänge
+  \item Correlation-ID
+\end{itemize}
+\end{block}
+\column{.46\textwidth}
+\begin{block}{Technische Sicht – Grafana / Loki}
+\centering
+\faChartLine\quad Warum ist es passiert?
+\vspace{.25cm}
+\begin{itemize}
+  \item strukturierte Logs
+  \item technische Fehler
+  \item serviceübergreifende Suche
+\end{itemize}
+\end{block}
+\end{columns}
+\storyline{Die Correlation-ID verbindet fachliche Ereignisse und technische Logs.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 12 – .NET Tests | A | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Nicht nur implementiert – auch getestet}
+\begin{columns}[c,onlytextwidth]
+\column{.34\textwidth}
+\centering
+{\fontsize{34}{38}\selectfont\textcolor{AuditGreen}{\textbf{45 / 45}}}\\[.2cm]
+{\Large erfolgreich}
+\column{.62\textwidth}
+\begin{tabular}{lr}
+\toprule
+\textbf{Bereich} & \textbf{Tests}\\
+\midrule
+Warehouse & 18\\
+Invoice & 12\\
+Audit & 10\\
+E2E & 5\\
+\midrule
+\textbf{Gesamt} & \textbf{45}\\
+\bottomrule
+\end{tabular}
+\end{columns}
+\vspace{.45cm}
+\centering\small Happy Path \quad | \quad parallele Reservierung \quad | \quad Duplicate Events \quad | \quad ungültige Events
+\end{frame}
+
+% ------------------------------------------------------------
+% 13 – Sprecherwechsel | B | ca. 0:30
+% ------------------------------------------------------------
+\begin{frame}{Nach der Reservierung übernimmt die Zahlungsorchestrierung}
+\centering
+\vspace{.25cm}
+{\Large Bestand ist reserviert.}\par
+\vspace{.35cm}
+{\Huge \textbf{Was passiert jetzt mit der Zahlung?}}\par
+\vspace{.7cm}
+\begin{tikzpicture}[node distance=.8cm]
+\node[service=DotnetBlue] (w) {Warehouse\\\faCheck\ reserviert};
+\node[service=JavaOrange,right=of w] (s) {Shop\\Orchestrierung};
+\node[service=JavaOrange,right=of s] (b) {Billing\\Payment};
+\draw[arrow] (w)--(s); \draw[arrow] (s)--(b);
+\end{tikzpicture}
+\vspace{.5cm}
+\storyline{Mohammed übernimmt: Zahlungsorchestrierung und Provider-Integration.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 14 – Shop/Billing | B | ca. 1:45
+% ------------------------------------------------------------
+\begin{frame}{Shop und Billing: Orchestrierung und Zahlung}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Shop-Service}
+\begin{itemize}
+  \item nimmt Bestellung an
+  \item steuert Saga-Ablauf
+  \item ruft Warehouse und Billing auf
+  \item verarbeitet Payment-Events
+\end{itemize}
+\end{block}
+\column{.47\textwidth}
+\begin{block}{Billing-Service}
+\begin{itemize}
+  \item initialisiert Zahlung
+  \item kapselt Payment-Provider
+  \item verarbeitet Webhooks
+  \item publiziert Payment-Events
+\end{itemize}
+\end{block}
+\end{columns}
+\storyline{Shop kennt den Geschäftsprozess. Billing kennt die Zahlungsanbieter.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 15 – Payment Fassade | B | ca. 1:45
+% ------------------------------------------------------------
+\begin{frame}{Warum eine Payment-Fassade?}
+\centering
+\begin{tikzpicture}[node distance=.8cm]
+  \node[service=JavaOrange] (bill) {Billing};
+  \node[story,right=1.3cm of bill,minimum width=2.8cm] (fac) {Payment\\Facade / Strategy};
+  \node[mini=ShopBlue,right=1.3cm of fac,yshift=1cm] (stripe) {Stripe};
+  \node[mini=JavaOrange,right=1.3cm of fac] (paypal) {PayPal};
+  \node[mini=InfraGray,right=1.3cm of fac,yshift=-1cm] (test) {Test Provider};
+  \draw[arrow] (bill)--(fac); \draw[arrow] (fac)--(stripe); \draw[arrow] (fac)--(paypal); \draw[arrow] (fac)--(test);
+\end{tikzpicture}
+\vspace{.5cm}
+\begin{itemize}
+  \item Geschäftslogik bleibt unabhängig vom konkreten Anbieter.
+  \item Provider können ausgetauscht oder ergänzt werden.
+  \item Provider-spezifische Details bleiben im Billing-Service.
+\end{itemize}
+\end{frame}
+
+% ------------------------------------------------------------
+% 16 – Webhook | B | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Vom externen Webhook zum internen Event}
+\centering
+\begin{tikzpicture}[node distance=1.05cm]
+  \node[story] (provider) {Stripe / PayPal};
+  \node[service=JavaOrange,right=of provider] (bill) {Billing\\Webhook Gateway};
+  \node[service=InfraGray,right=of bill] (kafka) {Kafka};
+  \node[service=JavaOrange,right=of kafka] (shop) {Shop};
+  \draw[arrow] (provider)-- node[above=3pt,font=\scriptsize]{Webhook} (bill);
+  \draw[event] (bill)--(kafka);
+  \draw[event] (kafka)-- node[above=3pt,font=\scriptsize]{Event} (shop);
+\end{tikzpicture}\par
+\vspace{.25cm}
+{\scriptsize Billing übersetzt den Webhook in \texttt{PAYMENT\_SUCCEEDED} oder \texttt{PAYMENT\_FAILED}.}
+
+\vspace{.4cm}
+\begin{block}{Kernidee}
+Externe Provider-Ereignisse werden an einer Stelle validiert und in unsere internen Event-Verträge übersetzt.
+\end{block}
+\end{frame}
+
+% ------------------------------------------------------------
+% 17 – Payment failed | B | ca. 1:45
+% ------------------------------------------------------------
+\begin{frame}{Worst Case 2: Zahlung schlägt nach Reservierung fehl}
+\centering
+\begin{tikzpicture}[node distance=.45cm]
+  \node[good] (r) {WAREHOUSE\\RESERVED};
+  \node[bad,right=of r] (p) {PAYMENT\\FAILED};
+  \node[story,right=of p] (rollback) {Rollback\\anfordern};
+  \node[good,right=of rollback] (cancel) {Reservierung\\freigeben};
+  \draw[arrow] (r)--(p); \draw[arrow] (p)--(rollback); \draw[arrow] (rollback)--(cancel);
+\end{tikzpicture}
+\vspace{.9cm}
+\begin{itemize}
+  \item Die Reservierung existiert bereits – deshalb ist jetzt Kompensation nötig.
+  \item Warehouse gibt den reservierten Bestand wieder frei.
+  \item Ohne \texttt{PAYMENT\_SUCCEEDED} wird keine Rechnung erstellt.
+  \item Der Bestellstatus dokumentiert den Zahlungsfehler.
+\end{itemize}
+\end{frame}
+
+% ------------------------------------------------------------
+% 18 – Commit failure | B | ca. 2:15
+% ------------------------------------------------------------
+\begin{frame}{Der schwierigste Fall: Zahlung erfolgreich, Commit schlägt fehl}
+\centering
+\begin{tikzpicture}[node distance=.42cm]
+  \node[good] (pay) {Payment\\\faCheck};
+  \node[bad,right=of pay] (commit) {Commit\\\faTimes};
+  \node[story,right=of commit] (retry) {Retry\\3 Versuche};
+  \node[bad,right=of retry] (still) {weiterhin\\Fehler};
+  \node[story,below=1cm of still] (refund) {Payment\\Refund};
+  \node[good,left=1.1cm of refund] (comp) {Kompensation\\abgeschlossen};
+  \draw[arrow] (pay)--(commit); \draw[arrow] (commit)--(retry); \draw[arrow] (retry)--(still); \draw[arrow] (still)--(refund); \draw[arrow] (refund)--(comp);
+\end{tikzpicture}
+\vspace{.45cm}
+\begin{block}{Warum ist dieser Fall wichtig?}
+Es gibt keine globale ACID-Transaktion über Shop, Billing und Warehouse. Bereits erfolgreiche Schritte müssen deshalb fachlich kompensiert werden.
+\end{block}
+\end{frame}
+
+% ------------------------------------------------------------
+% 19 – Happy Path | B | ca. 2:15
+% ------------------------------------------------------------
+\begin{frame}{Wenn alles zusammenspielt: der Happy Path}
+\centering
+\begin{tikzpicture}[node distance=.25cm,scale=.88,transform shape]
+  \node[mini=ShopBlue] (e1) {ORDER\\CREATED};
+  \node[mini=DotnetBlue,right=of e1] (e2) {WAREHOUSE\\RESERVED};
+  \node[mini=JavaOrange,right=of e2] (e3) {PAYMENT\\INITIALIZED};
+  \node[mini=AuditGreen,right=of e3] (e4) {PAYMENT\\SUCCEEDED};
+  \node[mini=DotnetBlue,below=.75cm of e4] (e5) {INVOICE\\CREATED};
+  \node[mini=DotnetBlue,left=of e5] (e6) {WAREHOUSE\\COMMITTED};
+  \node[mini=AuditGreen,left=of e6] (e7) {ORDER\\COMPLETED};
+  \draw[arrow] (e1)--(e2); \draw[arrow] (e2)--(e3); \draw[arrow] (e3)--(e4); \draw[arrow] (e4)--(e5); \draw[arrow] (e5)--(e6); \draw[arrow] (e6)--(e7);
+\end{tikzpicture}
+\vspace{.5cm}
+\begin{columns}[T,onlytextwidth]
+\column{.31\textwidth}\centering\textbf{Synchron}\\Reserve, Payment-Start, Commit
+\column{.31\textwidth}\centering\textbf{Asynchron}\\Payment-, Invoice-, Audit-Events
+\column{.31\textwidth}\centering\textbf{Nachvollziehbar}\\eine Correlation-ID
+\end{columns}
+\storyline{Der Happy Path ist das Ergebnis der zuvor gezeigten Architekturentscheidungen – nicht nur ein Sequenzdiagramm.}
+\end{frame}
+
+% ------------------------------------------------------------
+% 20 – Deployment/Integration | B | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Vom einzelnen Service zum Gesamtsystem}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Deployment}
+\begin{itemize}
+  \item Docker Compose
+  \item Nginx als zentraler Einstieg
+  \item getrennte PostgreSQL-Datenbanken
+  \item Kafka + Observability-Stack
+\end{itemize}
+\end{block}
+\column{.47\textwidth}
+\begin{block}{Integration}
+\begin{itemize}
+  \item gemeinsame Event-Verträge
+  \item stabile REST-Schnittstellen
+  \item Correlation-ID über Servicegrenzen
+  \item E2E-Validierung kritischer Abläufe
+\end{itemize}
+\end{block}
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------
+% 21 – Ergebnis | B | ca. 1:30
+% ------------------------------------------------------------
+\begin{frame}{Was haben wir erreicht?}
+\centering
+\begin{tikzpicture}[node distance=.55cm and .7cm]
+  \node[good,minimum width=4.2cm] (a) {\faCheck\ Klare Servicegrenzen};
+  \node[good,minimum width=4.2cm,right=of a] (b) {\faCheck\ Kontrollierte Fehlerfälle};
+  \node[good,minimum width=4.2cm,below=of a] (c) {\faCheck\ Idempotente Verarbeitung};
+  \node[good,minimum width=4.2cm,right=of c] (d) {\faCheck\ Durchgängige Nachvollziehbarkeit};
+\end{tikzpicture}\par
+\vspace{.65cm}
+\begin{minipage}{.92\textwidth}
+\centering
+{\large\textbf{REST für Entscheidungen. Kafka für Ereignisse.}}\\[.25cm]
+{\large\textbf{Idempotenz für Sicherheit.}}
+\end{minipage}
+\end{frame}
+
+% ------------------------------------------------------------
+% 22 – Abschluss | ca. 0:30 + Fragen
+% ------------------------------------------------------------
+\begin{frame}{Vielen Dank}
+\centering
+\vspace{1cm}
+{\Huge \textbf{Fragen?}}\\[.8cm]
+{\large Microservice-Architektur eines Möbel-Online-Shops}\\[.25cm]
+Abdelwadoud Mabrouk \quad | \quad Mohammed Amine Grioui
+\end{frame}
+
+\end{document}

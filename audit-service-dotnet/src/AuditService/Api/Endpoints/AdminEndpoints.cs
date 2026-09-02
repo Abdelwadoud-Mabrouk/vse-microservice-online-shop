@@ -33,6 +33,11 @@ public static class AdminEndpoints
                 results.Add(await CheckServiceAsync(client, check, cancellationToken));
             }
 
+            foreach (var check in DatabaseChecks)
+            {
+                results.Add(await CheckServiceAsync(client, check, cancellationToken));
+            }
+
             return Results.Ok(results);
         });
 
@@ -114,10 +119,16 @@ public static class AdminEndpoints
     private static readonly ServiceHealthCheck[] ServiceChecks =
     [
         new("audit-service", "http://localhost:8080/health"),
-     new("shop-service", "http://shop-service:8087/health"),
-     new("billing-service", "http://billing-service:8089/api/v1/billing/health"),
+        new("shop-service", "http://shop-service:8087/health"),
+        new("billing-service", "http://billing-service:8089/api/v1/billing/health"),
         new("warehouse-service", "http://warehouse-service:8080/health"),
         new("invoice-service", "http://invoice-service:8080/health")
+    ];
+
+    private static readonly ServiceHealthCheck[] DatabaseChecks =
+    [
+        new("shop-db", "http://shop-service:8087/health/database"),
+        new("billing-db", "http://billing-service:8089/api/v1/billing/health/database")
     ];
 
     private static void AddCorrelationId(HttpRequestMessage message, HttpContext context)

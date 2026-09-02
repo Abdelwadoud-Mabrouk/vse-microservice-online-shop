@@ -74,7 +74,7 @@ npm test -- --watch=false
 
 ## Dokumentation
 
-- [Abschlussbericht](output/pdf/abschlussbericht.pdf)
+- [Abschlussbericht](docs/report/abschlussbericht.pdf)
 - [Architecture.md](docs/architecture.md)
 - [Shop-Service](shop-service-java/README.md)
 - [Billing-Service](billing-service-java/README.md)

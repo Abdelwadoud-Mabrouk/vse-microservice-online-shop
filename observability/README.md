@@ -14,6 +14,17 @@ Die Java-Services werden hier nicht konfiguriert.
 
 Die .NET-Services schreiben strukturierte Logs.
 
+Alle fünf Microservices legen ihre Logdateien gemeinsam unter `./logs` ab:
+
+```text
+logs/
+  audit-service/
+  billing-service/
+  invoice-service/
+  shop-service/
+  warehouse-service/
+```
+
 Diese Logs können über OpenTelemetry an Loki gesendet werden. Grafana zeigt die Logs dann an.
 
 Der Ablauf ist:
@@ -92,8 +103,25 @@ curl http://localhost:3000/api/health
 In Grafana:
 
 ```text
-Explore -> Loki
+Dashboards -> Online Shop -> Online Shop – Monitoring Easy
 ```
+
+Das Dashboard wird beim Start automatisch provisioniert. Es zeigt sechs leicht
+erklärbare Panels: Logs gesamt, Informationen, Warnungen, Fehler, Aktivität je
+Service und Live-Logs.
+
+### Kurze Erklärung für die Präsentation
+
+> Jeder Microservice schreibt strukturierte Logs. Promtail beziehungsweise der
+> OpenTelemetry Collector sammeln diese Logs und senden sie an Loki. Grafana
+> fragt Loki ab und visualisiert den Zustand des Systems. Grün steht für einen
+> normalen Betrieb, Orange für Warnungen und Rot für Fehler. Die Zeitreihe zeigt,
+> welcher Service wann aktiv war. Im Live-Log können die Ursachen anschließend
+> im Detail untersucht werden.
+
+Über den Filter `Service auswählen` können einzelne Microservices betrachtet werden.
+
+Für freie Abfragen steht weiterhin `Explore -> Loki` zur Verfügung.
 
 Nützliche Felder zum Suchen:
 
