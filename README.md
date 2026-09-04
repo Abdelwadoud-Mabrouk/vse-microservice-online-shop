@@ -71,7 +71,32 @@ Angular-Tests:
 cd frontend-angular
 npm test -- --watch=false
 ```
+### Manuelle Tests & Zahlungsanbieter-Konfiguration
 
+Zur Durchführung manueller Ende-zu-Ende-Tests des Checkout-Prozesses stehen Testdaten für Stripe und PayPal zur Verfügung.
+
+#### 1. Stripe (Kreditkarte)
+Für Stripe-Testzahlungen können im Frontend folgende **Stripe-Testkarten** verwendet werden:
+
+* **Erfolgreiche Zahlung (\texttt{PAYMENT\_SUCCEEDED}):**
+    * **Kartennummer:** `4242 4242 4242 4242`
+    * **Ablaufdatum (MM/YY):** Beliebiges zukünftiges Datum (z. B. `12/30`)
+    * **CVC:** Beliebige 3-stellige Zahl (z. B. `123`)
+* **Fehlgeschlagene Zahlung (\texttt{PAYMENT\_FAILED} / Card Declined):**
+    * **Kartennummer:** `4000 0000 0000 9995`
+    * **Ablaufdatum (MM/YY):** Beliebiges zukünftiges Datum
+    * **CVC:** Beliebige 3-stellige Zahl
+
+>  **Dokumentation:** Weitere Test-Karten und Fehlerfälle finden Sie in der offiziellen [Stripe Testing Documentation](https://stripe.com/docs/testing).
+
+#### 2. PayPal Sandbox
+Um Zahlungen über PayPal im Testmodus durchzuführen:
+
+1. Rufen Sie das [PayPal Developer Dashboard](https://developer.paypal.com/) auf.
+2. Erstellen Sie unter **Sandbox → Accounts** einen neuen Test-Käufer-Account (*Personal Account*).
+3. Nutzen Sie die dort generierte **Sandbox-E-Mail** und das **Passwort** für den Login im PayPal-Checkout-Window.
+
+>  **Sicherheitshinweis:** Aus Sicherheitsgründen werden keine fertigen PayPal-Zugangsdaten im Quellcode oder im Repository bereitgestellt. Jeder Tester muss für Ende-zu-Ende-Tests eigene Sandbox-Accounts über das PayPal Developer Portal generieren.
 ## Dokumentation
 
 - [Abschlussbericht](docs/report/abschlussbericht.pdf)
